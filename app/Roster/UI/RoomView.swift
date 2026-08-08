@@ -1,15 +1,16 @@
 import SwiftUI
 
 /// The room. A static blueprint drawn once in a `Canvas`, with live views
-/// (agents, walk paths) layered on top.
+/// (agents, walk paths, monitor lights) layered on top.
 ///
 /// Why this split: the `Canvas` costs nothing while nothing changes — SwiftUI
 /// is retained-mode, so a calm room is a *free* room (the reason we chose
-/// SwiftUI over SpriteKit, whose render loop never sleeps). Only the few
-/// small agent views participate in animation.
+/// SwiftUI over SpriteKit, whose render loop never sleeps). The few looping
+/// animations (monitor breathing, waiting ring) are opacity/scale tweens the
+/// system runs out-of-process; the app's CPU stays at zero between events.
 struct RoomView: View {
 
-    let sim: AgentSim
+    let office: Office
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
@@ -22,13 +23,21 @@ struct RoomView: View {
 
             ZStack {
                 BlueprintCanvas(theme: theme)
+                MonitorLights(office: office, theme: theme)
 
                 // Paths under the dots, dots on top.
-                ForEach(sim.agents) { agent in
-                    WalkPathView(agent: agent, theme: theme)
+                ForEach(office.sessions) { session in
+                    WalkPathView(session: session, theme: theme)
                 }
-                ForEach(sim.agents) { agent in
-                    AgentDotView(agent: agent, theme: theme)
+                ForEach(office.sessions) { session in
+                    AgentDotView(
+                        session: session,
+                        seatCount: office.seatCount(onStation: session.stationIndex),
+                        theme: theme
+                    )
+                    // Fade/scale on session start & end. The panel wraps the
+                    // structural mutations in `withAnimation` to trigger it.
+                    .transition(.opacity.combined(with: .scale(scale: 0.4)))
                 }
             }
             .frame(width: RoomPlan.canvasSize.width, height: RoomPlan.canvasSize.height)
@@ -127,10 +136,11 @@ private struct BlueprintCanvas: View {
     }
 
     private func draw(station: RoomPlan.Station, in context: GraphicsContext) {
-        // Desk and monitor.
+        // Desk; monitor as an outline — its light is a live overlay.
         context.stroke(Path(station.deskRect), with: .color(theme.ink),
                        style: StrokeStyle(lineWidth: 1.4))
-        context.fill(Path(station.monitorRect), with: .color(theme.ink))
+        context.stroke(Path(station.monitorRect), with: .color(theme.inkSoft),
+                       style: StrokeStyle(lineWidth: 1))
 
         // Chair.
         let chair = CGRect(x: station.chairCenter.x - 10, y: station.chairCenter.y - 10,
@@ -170,28 +180,71 @@ private struct BlueprintCanvas: View {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
+// Monitor lights: the bar "breathes" while someone at the station works.
+// ─────────────────────────────────────────────────────────────────────────
+
+private struct MonitorLights: View {
+
+    let office: Office
+    let theme: BlueprintTheme
+
+    var body: some View {
+        ForEach(RoomPlan.stations.indices, id: \.self) { index in
+            if office.hasWorkingAgent(onStation: index) {
+                BreathingBar(rect: RoomPlan.stations[index].monitorRect, theme: theme)
+            }
+        }
+    }
+}
+
+private struct BreathingBar: View {
+
+    let rect: CGRect
+    let theme: BlueprintTheme
+    @State private var bright = false
+
+    var body: some View {
+        Rectangle()
+            .fill(theme.ink)
+            .frame(width: rect.width, height: rect.height)
+            .position(x: rect.midX, y: rect.midY)
+            .opacity(bright ? 0.9 : 0.35)
+            .onAppear {
+                // A slow tween the render server runs on its own — the app
+                // process does no per-frame work for this.
+                withAnimation(.easeInOut(duration: 1.9).repeatForever(autoreverses: true)) {
+                    bright = true
+                }
+            }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 // The dashed walk path: draws itself ahead of the agent, retracts after.
 // ─────────────────────────────────────────────────────────────────────────
 
 private struct WalkPathView: View {
 
-    let agent: SimAgent
+    let session: AgentSession
     let theme: BlueprintTheme
 
-    /// The path is on screen from the moment the agent stands up until it
-    /// sits back down — including the pause at your desk, where it reads as
-    /// "this is the way back".
+    /// On screen for the whole trip: from standing up (only when the stand
+    /// is the prelude to a walk, i.e. status is `finished`) to sitting back
+    /// down after the return leg.
     private var isVisible: Bool {
-        switch agent.phase {
-        case .standing, .walking, .atDesk, .walkingBack: return true
-        case .seated: return false
+        if session.phase == .walkingBack { return true }
+        guard session.status == .finished else { return false }
+        switch session.phase {
+        case .standing, .walking, .atDesk: return true
+        default: return false
         }
     }
 
     var body: some View {
-        let station = RoomPlan.stations[agent.stationIndex]
+        let station = RoomPlan.stations[session.stationIndex]
 
-        LineShape(from: station.standPoint, to: RoomPlan.arrivalPoint)
+        LineShape(from: station.standPoint(slot: session.seatSlot),
+                  to: RoomPlan.arrival(deskSlot: session.deskSlot))
             // trim + dash = the line draws itself point by point. A cheap
             // effect that reads beautifully on a blueprint.
             .trim(from: 0, to: isVisible ? 1 : 0)
@@ -215,25 +268,28 @@ private struct LineShape: Shape {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// One agent: a dot of ink whose position derives entirely from its phase.
+// One agent: a dot of ink. Its position derives from its phase; its look
+// derives from its status. Shape carries state — no accent colors.
 // ─────────────────────────────────────────────────────────────────────────
 
 private struct AgentDotView: View {
 
-    let agent: SimAgent
+    let session: AgentSession
+    /// Occupants of this agent's station, for seat spreading.
+    let seatCount: Int
     let theme: BlueprintTheme
 
     private var position: CGPoint {
-        let station = RoomPlan.stations[agent.stationIndex]
-        switch agent.phase {
+        let station = RoomPlan.stations[session.stationIndex]
+        switch session.phase {
         case .seated:
-            return station.chairCenter
+            return station.seatPoint(slot: session.seatSlot, of: seatCount)
         case .standing:
-            return station.standPoint
+            return station.standPoint(slot: session.seatSlot)
         case .walking, .atDesk:
-            return RoomPlan.arrivalPoint
+            return RoomPlan.arrival(deskSlot: session.deskSlot)
         case .walkingBack:
-            return station.standPoint
+            return station.standPoint(slot: session.seatSlot)
         }
     }
 
@@ -242,7 +298,7 @@ private struct AgentDotView: View {
     /// `.animation(_:value:)` modifier below re-reads this every time the
     /// phase changes, so the right duration applies to the right leg.
     private var transition: Animation {
-        switch agent.phase {
+        switch session.phase {
         case .walking, .walkingBack:
             return .easeInOut(duration: Choreo.walk)
         default:
@@ -252,19 +308,79 @@ private struct AgentDotView: View {
 
     var body: some View {
         ZStack {
-            // Halo when waiting at your desk. Its own quick fade, decoupled
-            // from the movement animation.
+            // Halo when waiting at your desk.
             Circle()
                 .fill(theme.glow)
                 .frame(width: 30, height: 30)
-                .opacity(agent.phase == .atDesk ? 1 : 0)
-                .animation(.easeInOut(duration: 0.35), value: agent.phase == .atDesk)
+                .opacity(session.phase == .atDesk ? 1 : 0)
+                .animation(.easeInOut(duration: 0.35), value: session.phase == .atDesk)
 
-            Circle()
-                .fill(theme.ink)
-                .frame(width: 14, height: 14)
+            // Pulsing ring while the agent waits on you. Inserted only in
+            // that state, so its animation starts fresh each time.
+            if session.status == .waitingForInput {
+                PulseRing(theme: theme)
+            }
+
+            dot
         }
         .position(position)
-        .animation(transition, value: agent.phase)
+        // Movement animation, keyed on the phase…
+        .animation(transition, value: session.phase)
+        // …plus a short slide when a colleague joins/leaves the station and
+        // the seat re-centers.
+        .animation(.easeInOut(duration: Choreo.standUp), value: seatCount)
+    }
+
+    /// Filled = working/finished · hollow = waiting on you · warn + cross =
+    /// failed. The vocabulary of the legend, in one place.
+    @ViewBuilder
+    private var dot: some View {
+        switch session.status {
+        case .failed:
+            ZStack {
+                Circle().fill(theme.warn).frame(width: 14, height: 14)
+                CrossMark()
+                    .stroke(theme.paper, style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
+                    .frame(width: 7, height: 7)
+            }
+        case .waitingForInput:
+            Circle()
+                .strokeBorder(theme.ink, lineWidth: 2)
+                .frame(width: 15, height: 15)
+        case .working, .finished:
+            Circle().fill(theme.ink).frame(width: 14, height: 14)
+        }
+    }
+}
+
+/// The expanding, fading ring of the "needs you" state.
+private struct PulseRing: View {
+
+    let theme: BlueprintTheme
+    @State private var expanded = false
+
+    var body: some View {
+        Circle()
+            .stroke(theme.ink, lineWidth: 1.4)
+            .frame(width: 20, height: 20)
+            .scaleEffect(expanded ? 1.8 : 0.8)
+            .opacity(expanded ? 0 : 0.8)
+            .onAppear {
+                withAnimation(.easeOut(duration: 2.8).repeatForever(autoreverses: false)) {
+                    expanded = true
+                }
+            }
+    }
+}
+
+/// A small ×, used only for the error state.
+private struct CrossMark: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        return path
     }
 }

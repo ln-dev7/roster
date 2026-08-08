@@ -11,17 +11,17 @@ struct ContentView: View {
     /// alive for the life of the window and re-renders whatever reads it.
     /// (`@Observable` is the macOS 14 replacement for ObservableObject —
     /// views track exactly the properties they touch, nothing more.)
-    @State private var sim = AgentSim()
+    @State private var office = Office()
 
     var body: some View {
         VStack(spacing: 0) {
-            RoomView(sim: sim)
+            RoomView(office: office)
             Divider()
-            SimulationPanel(sim: sim)
+            SimulationPanel(office: office)
         }
         // Below this the room becomes hard to read; the window is free to
         // grow as much as it likes.
-        .frame(minWidth: 720, minHeight: 480)
+        .frame(minWidth: 720, minHeight: 500)
     }
 }
 

@@ -26,14 +26,27 @@ enum RoomPlan {
 
         /// The desk, seen from above.
         var deskRect: CGRect { CGRect(x: centerX - 42, y: 92, width: 84, height: 34) }
-        /// The monitor: a filled bar on the desk.
+        /// The monitor bar on the desk (outline when off; the view overlays
+        /// a breathing fill while someone works).
         var monitorRect: CGRect { CGRect(x: centerX - 18, y: 99, width: 36, height: 6) }
-        /// The chair — also where a seated agent sits.
+        /// The chair.
         var chairCenter: CGPoint { CGPoint(x: centerX, y: 152) }
-        /// Where an agent stands when it gets up.
-        var standPoint: CGPoint { CGPoint(x: centerX + 34, y: 152) }
         /// Project name, lettered like a drawing annotation.
         var labelPoint: CGPoint { CGPoint(x: centerX, y: 193) }
+
+        /// Where an agent sits. Alone it takes the chair; when two share
+        /// the station they spread symmetrically around it.
+        func seatPoint(slot: Int, of count: Int) -> CGPoint {
+            guard count > 1 else { return chairCenter }
+            let dx: CGFloat = slot == 0 ? -14 : 14
+            return CGPoint(x: chairCenter.x + dx, y: chairCenter.y)
+        }
+
+        /// Where an agent stands when it gets up; the second occupant
+        /// stands a step further out so the two never overlap.
+        func standPoint(slot: Int) -> CGPoint {
+            CGPoint(x: centerX + 34 + CGFloat(slot) * 24, y: 152)
+        }
     }
 
     static let stations: [Station] = [
@@ -51,6 +64,14 @@ enum RoomPlan {
 
     /// Where a finished agent pulls up, on the far side of your desk.
     static let arrivalPoint = CGPoint(x: 480, y: 384)
+
+    /// Several finished agents queue side by side: first in the middle,
+    /// the next ones alternating left and right.
+    static func arrival(deskSlot: Int) -> CGPoint {
+        let offsets: [CGFloat] = [0, -30, 30, -58, 58, -86]
+        let dx = offsets[min(deskSlot, offsets.count - 1)]
+        return CGPoint(x: arrivalPoint.x + dx, y: arrivalPoint.y)
+    }
 
     // ── Door (bottom-left), drawn like an architect would ────────────────
 
