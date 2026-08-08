@@ -1,17 +1,16 @@
 import XCTest
 
 /// Geometry sanity checks — cheap insurance that layout edits never make
-/// two agents overlap.
+/// two agents overlap or push a desk through a wall.
 final class RoomPlanTests: XCTestCase {
 
     func testLoneAgentTakesTheChair() {
-        for station in RoomPlan.stations {
-            XCTAssertEqual(station.seatPoint(slot: 0, of: 1), station.chairCenter)
-        }
+        let station = RoomPlan.station(index: 0, of: 3)
+        XCTAssertEqual(station.seatPoint(slot: 0, of: 1), station.chairCenter)
     }
 
     func testSharedStationSpreadsSeatsApart() {
-        let station = RoomPlan.stations[0]
+        let station = RoomPlan.station(index: 1, of: 3)
         let left = station.seatPoint(slot: 0, of: 2)
         let right = station.seatPoint(slot: 1, of: 2)
         XCTAssertNotEqual(left, right)
@@ -20,7 +19,7 @@ final class RoomPlanTests: XCTestCase {
     }
 
     func testStandPointsOfSeatSlotsDoNotCollide() {
-        let station = RoomPlan.stations[0]
+        let station = RoomPlan.station(index: 0, of: 3)
         XCTAssertNotEqual(station.standPoint(slot: 0), station.standPoint(slot: 1))
     }
 
@@ -30,10 +29,25 @@ final class RoomPlanTests: XCTestCase {
                        "every desk slot needs its own spot")
     }
 
-    func testStationsSitInsideTheWalls() {
-        for station in RoomPlan.stations {
-            XCTAssertTrue(RoomPlan.wall.contains(station.deskRect))
+    func testStationsStayInsideTheWallsForEveryRoomSize() {
+        for count in 1...Office.maxStations {
+            for index in 0..<count {
+                let desk = RoomPlan.station(index: index, of: count).deskRect
+                XCTAssertTrue(RoomPlan.wall.contains(desk),
+                              "desk \(index + 1)/\(count) leaves the room")
+            }
         }
         XCTAssertTrue(RoomPlan.wall.contains(RoomPlan.myDesk))
+    }
+
+    func testNeighbouringDesksNeverTouch() {
+        for count in 2...Office.maxStations {
+            for index in 1..<count {
+                let previous = RoomPlan.station(index: index - 1, of: count).deskRect
+                let current = RoomPlan.station(index: index, of: count).deskRect
+                XCTAssertFalse(previous.intersects(current),
+                               "desks \(index - 1) and \(index) overlap at count \(count)")
+            }
+        }
     }
 }

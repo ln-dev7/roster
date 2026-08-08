@@ -6,6 +6,9 @@ import CoreGraphics
 /// whole thing to fit the window — much easier to reason about than
 /// proportional layout, and it guarantees the composition never degrades.
 /// Every point below lives in this design space.
+///
+/// Stations are now *computed*: give an index and the total count, get the
+/// geometry. The room spreads one to six desks evenly along the top wall.
 enum RoomPlan {
 
     static let canvasSize = CGSize(width: 960, height: 540)
@@ -18,10 +21,8 @@ enum RoomPlan {
 
     // ── Workstations ─────────────────────────────────────────────────────
 
-    /// One project = one workstation. Three fake ones for the prototype;
-    /// increment 3 will create these from real repositories.
-    struct Station {
-        let name: String
+    /// Pure geometry of one desk; names live in `Workstation`.
+    struct Station: Equatable {
         let centerX: CGFloat
 
         /// The desk, seen from above.
@@ -49,11 +50,15 @@ enum RoomPlan {
         }
     }
 
-    static let stations: [Station] = [
-        Station(name: "circle", centerX: 190),
-        Station(name: "dockkeep", centerX: 480),
-        Station(name: "blog", centerX: 770),
-    ]
+    /// Geometry of station `index` in a room of `count` desks: evenly
+    /// spread along the top wall, centered as a group.
+    static func station(index: Int, of count: Int) -> Station {
+        let usable = wall.insetBy(dx: 80, dy: 0)
+        let n = CGFloat(max(count, 1))
+        let spacing = usable.width / n
+        let centerX = usable.minX + spacing * (CGFloat(index) + 0.5)
+        return Station(centerX: centerX)
+    }
 
     // ── Your desk ────────────────────────────────────────────────────────
 

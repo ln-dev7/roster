@@ -1,9 +1,8 @@
 import SwiftUI
 
 /// Debug controls: spawn agents on stations and push each one through every
-/// domain event the real data source will send in increment 3. This panel is
-/// scaffolding — it moves behind a hidden menu later, and doubles as the
-/// GIF-recording rig forever.
+/// domain event the real data source sends. Hidden behind the Debug menu
+/// once connected — and kept forever as the GIF-recording rig.
 struct SimulationPanel: View {
 
     let office: Office
@@ -15,22 +14,31 @@ struct SimulationPanel: View {
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(.secondary)
 
-                ForEach(RoomPlan.stations.indices, id: \.self) { index in
-                    Button("+ \(RoomPlan.stations[index].name)") {
-                        // withAnimation drives the dot's insertion
-                        // transition (fade + scale) in RoomView.
+                if office.workstations.isEmpty {
+                    Button("Seed demo room") {
                         withAnimation(.easeOut(duration: 0.45)) {
-                            office.startSession(onStation: index)
+                            office.seedDemo()
                         }
                     }
-                    .disabled(!office.canAddSession(onStation: index))
+                } else {
+                    ForEach(office.workstations.indices, id: \.self) { index in
+                        Button("+ \(office.workstations[index].name)") {
+                            // withAnimation drives the dot's insertion
+                            // transition (fade + scale) in RoomView.
+                            withAnimation(.easeOut(duration: 0.45)) {
+                                office.startSession(onStation: index)
+                            }
+                        }
+                        .disabled(!office.canAddSession(onStation: index))
+                    }
                 }
 
                 Spacer()
 
-                Button("Reset") {
+                Button("Reset demo") {
                     withAnimation(.easeOut(duration: 0.45)) {
-                        office.reset()
+                        office.clearRoom()
+                        office.seedDemo()
                     }
                 }
             }
@@ -67,6 +75,9 @@ struct SimulationPanel: View {
     }
 
     private func label(for session: AgentSession) -> String {
-        "\(RoomPlan.stations[session.stationIndex].name) · agent \(session.id)"
+        let station = office.workstations.indices.contains(session.stationIndex)
+            ? office.workstations[session.stationIndex].name
+            : "?"
+        return "\(station) · agent \(session.id)"
     }
 }

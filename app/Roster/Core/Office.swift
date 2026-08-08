@@ -5,8 +5,8 @@ import Observation
 //
 // Two separate ideas, kept deliberately apart:
 //
-//   • `SessionStatus` — what the agent session IS (the domain truth that
-//     real Claude Code hooks will drive in increment 3).
+//   • `SessionStatus` — what the agent session IS (the domain truth, driven
+//     by real Claude Code hooks through `Office.apply(_:)`).
 //   • `AgentPhase`   — where its dot is in the room (pure presentation,
 //     produced from status changes by the choreography below).
 //
@@ -34,11 +34,22 @@ enum AgentPhase: Equatable {
     case walkingBack
 }
 
+/// One desk in the room = one project (a repository, in real life).
+/// Stations persist even when empty — an empty desk is a state, not a gap.
+struct Workstation: Identifiable, Equatable {
+    /// Stable identity: the repository path for real stations, a "demo-…"
+    /// string for simulated ones.
+    let id: String
+    var name: String
+    /// Filesystem path of the repository, when this is a real project.
+    var path: String?
+}
+
 /// One live agent session. A value type on purpose: replacing an element of
 /// `Office.sessions` is exactly what lets `@Observable` notice a change.
 struct AgentSession: Identifiable, Equatable {
     let id: Int
-    /// Index into `RoomPlan.stations` — the project this agent works on.
+    /// Index into `Office.workstations` — the project this agent works on.
     let stationIndex: Int
     var status: SessionStatus = .working
     var phase: AgentPhase = .seated
@@ -64,31 +75,49 @@ enum Choreo {
 /// The room's state machine. UI-free (no SwiftUI import) so the test bundle
 /// compiles it directly and exercises every transition.
 ///
-/// The public methods are the exact vocabulary the real event source will
-/// speak in increment 3 (`startSession`, `needsInput`, `finish`, `fail`,
-/// `endSession`) — the simulation panel is just an early caller.
+/// The public methods are the exact vocabulary the event source speaks
+/// (`startSession`, `needsInput`, `finish`, `fail`, `endSession`) — the
+/// simulation panel and `Office.apply(_:)` are just two different callers.
 @MainActor
 @Observable
 final class Office {
 
+    /// The room never draws more desks than this — beyond six the drawing
+    /// stops being readable at a glance, which is the whole point.
+    static let maxStations = 6
+
+    private(set) var workstations: [Workstation] = []
     private(set) var sessions: [AgentSession] = []
 
-    // `@ObservationIgnored`: bookkeeping the UI never reads, so it should
-    // not participate in change tracking.
+    // `@ObservationIgnored`: bookkeeping the UI never reads directly, so it
+    // should not participate in change tracking.
     @ObservationIgnored private var nextID = 1
     @ObservationIgnored private var generations: [Int: Int] = [:]
 
-    /// Injected clock. Tests pass an instant (or logging) sleeper, so the
+    // ── Plumbing for the real event source (see Office+Events.swift) ────
+    /// Claude Code session_id → our session id.
+    @ObservationIgnored var externalToID: [String: Int] = [:]
+    /// When each session last received a prompt — used by the walk rule.
+    @ObservationIgnored var lastPromptAt: [Int: Date] = [:]
+    /// Last assistant message per session (the "summary" of increment 4).
+    @ObservationIgnored var lastSummary: [Int: String] = [:]
+    /// A turn shorter than this doesn't earn a walk: quick chat replies
+    /// would send agents pacing constantly. Tunable; 45 s felt right.
+    @ObservationIgnored var finishThreshold: TimeInterval = 45
+    /// Injected clock for the walk rule, so tests can time-travel.
+    @ObservationIgnored var now: () -> Date = { Date() }
+
+    /// Injected sleeper. Tests pass an instant (or logging) one, so the
     /// whole choreography runs — and is asserted — in microseconds.
     /// `@MainActor` on the closure type lets test sleepers read the office
     /// state directly (everything here lives on the main actor anyway).
-    @ObservationIgnored private let sleeper: @MainActor (Double) async -> Void
+    /// (A `let` is never observation-tracked, no attribute needed.)
+    private let sleeper: @MainActor (Double) async -> Void
 
     init(sleeper: @escaping @MainActor (Double) async -> Void = { seconds in
         try? await Task.sleep(for: .seconds(seconds))
     }) {
         self.sleeper = sleeper
-        reset()
     }
 
     // MARK: Queries
@@ -115,13 +144,49 @@ final class Office {
         }
     }
 
+    // MARK: Workstations
+
+    /// Returns the station index for a repository, creating the desk on
+    /// first sight. Nil when the room is full (capped, not scrolled).
+    func workstationIndex(forPath path: String) -> Int? {
+        if let existing = workstations.firstIndex(where: { $0.id == path }) {
+            return existing
+        }
+        guard workstations.count < Self.maxStations else { return nil }
+        let name = (path as NSString).lastPathComponent
+        workstations.append(Workstation(id: path, name: name, path: path))
+        return workstations.count - 1
+    }
+
+    /// Three fake desks with one working agent each — the demo room, used
+    /// until real sessions exist, and forever by the GIF studio.
+    func seedDemo() {
+        guard workstations.isEmpty else { return }
+        for name in ["circle", "dockkeep", "blog"] {
+            workstations.append(Workstation(id: "demo-\(name)", name: name, path: nil))
+            startSession(onStation: workstations.count - 1)
+        }
+    }
+
+    /// Empties the room completely (demo reset).
+    func clearRoom() {
+        for session in sessions { invalidateChoreography(for: session.id) }
+        generations.removeAll()
+        externalToID.removeAll()
+        lastPromptAt.removeAll()
+        lastSummary.removeAll()
+        sessions.removeAll()
+        workstations.removeAll()
+    }
+
     // MARK: Domain events
 
     /// A new agent sits down at a station. Returns its id, or nil if the
     /// station is full.
     @discardableResult
     func startSession(onStation stationIndex: Int) -> Int? {
-        guard canAddSession(onStation: stationIndex) else { return nil }
+        guard workstations.indices.contains(stationIndex),
+              canAddSession(onStation: stationIndex) else { return nil }
         let taken = Set(sessions.filter { $0.stationIndex == stationIndex }.map(\.seatSlot))
         let slot = taken.contains(0) ? 1 : 0
         let id = nextID
@@ -201,24 +266,19 @@ final class Office {
     func endSession(_ id: Int) {
         invalidateChoreography(for: id)
         generations[id] = nil
-        sessions.removeAll { $0.id == id }
-    }
-
-    /// Back to the demo baseline: one working agent per station.
-    func reset() {
-        for session in sessions { invalidateChoreography(for: session.id) }
-        generations.removeAll()
-        sessions.removeAll()
-        for stationIndex in RoomPlan.stations.indices {
-            startSession(onStation: stationIndex)
+        lastPromptAt[id] = nil
+        lastSummary[id] = nil
+        if let key = externalToID.first(where: { $0.value == id })?.key {
+            externalToID[key] = nil
         }
+        sessions.removeAll { $0.id == id }
     }
 
     // MARK: Choreography plumbing
 
     /// Each domain event bumps the session's generation; a running
     /// choreography checks it before every step and quietly dies when it
-    /// went stale. This is what makes "Fail" pressed mid-walk safe.
+    /// went stale. This is what makes an event landing mid-walk safe.
     @discardableResult
     private func invalidateChoreography(for id: Int) -> Int {
         let next = (generations[id] ?? 0) + 1

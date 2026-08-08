@@ -94,17 +94,20 @@ targets:
   #
   # The logic under test is compiled straight into this bundle rather than
   # imported from the app: a hosted test bundle would have to launch Roster
-  # (and, from increment 3 on, Roster on launch reads ~/.claude — exactly
-  # what tests must stay away from). Compiling two files twice is a small
-  # price for a suite that cannot touch anything real. Same reasoning as
-  # DockKeep's test target.
+  # (and Roster on launch reads ~/.claude — exactly what tests must stay
+  # away from). Compiling a handful of files twice is a small price for a
+  # suite that cannot touch anything real. Same reasoning as DockKeep's
+  # test target.
   RosterTests:
     type: bundle.unit-test
     platform: macOS
     sources:
       - path: RosterTests
       - path: Roster/Core/Office.swift
+      - path: Roster/Core/Office+Events.swift
+      - path: Roster/Core/ClaudeEvent.swift
       - path: Roster/Core/RoomPlan.swift
+      - path: Roster/Data/HookInstaller.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.lndev.roster.tests

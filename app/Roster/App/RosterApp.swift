@@ -8,6 +8,10 @@ import SwiftUI
 @main
 struct RosterApp: App {
 
+    /// Same storage key as ContentView: the Debug menu drives what the
+    /// window shows. `@AppStorage` persists it across launches.
+    @AppStorage("showSimulationPanel") private var showSimulationPanel = false
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -21,6 +25,13 @@ struct RosterApp: App {
         .commands {
             // One window is the whole app; "New Window" would only confuse.
             CommandGroup(replacing: .newItem) {}
+
+            // The simulation panel: our permanent GIF-recording studio,
+            // hidden by default once real sessions feed the room.
+            CommandMenu("Debug") {
+                Toggle("Show Simulation Panel", isOn: $showSimulationPanel)
+                    .keyboardShortcut("d", modifiers: [.command, .shift])
+            }
         }
     }
 }

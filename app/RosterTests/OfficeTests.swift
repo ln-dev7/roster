@@ -9,16 +9,19 @@ import XCTest
 @MainActor
 final class OfficeTests: XCTestCase {
 
-    /// An office whose clock never sleeps: choreographies run instantly.
+    /// A demo office whose clock never sleeps: choreographies run instantly.
     private func makeInstantOffice() -> Office {
-        Office(sleeper: { _ in })
+        let office = Office(sleeper: { _ in })
+        office.seedDemo()
+        return office
     }
 
     // MARK: Seating
 
-    func testResetSeatsOneWorkingAgentPerStation() {
+    func testSeedDemoSeatsOneWorkingAgentPerStation() {
         let office = makeInstantOffice()
-        XCTAssertEqual(office.sessions.count, RoomPlan.stations.count)
+        XCTAssertEqual(office.workstations.count, 3)
+        XCTAssertEqual(office.sessions.count, 3)
         for (index, session) in office.sessions.enumerated() {
             XCTAssertEqual(session.stationIndex, index)
             XCTAssertEqual(session.status, .working)
@@ -91,6 +94,7 @@ final class OfficeTests: XCTestCase {
                 observedPhases.append(phase)
             }
         })
+        office.seedDemo()
         let id = office.sessions[0].id
 
         await office.finish(id)?.value
@@ -146,6 +150,7 @@ final class OfficeTests: XCTestCase {
                 office.fail(office.sessions[0].id)
             }
         })
+        office.seedDemo()
         let id = office.sessions[0].id
 
         await office.finish(id)?.value

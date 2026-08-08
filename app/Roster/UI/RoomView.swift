@@ -15,6 +15,7 @@ struct RoomView: View {
 
     var body: some View {
         let theme = BlueprintTheme.current(for: colorScheme)
+        let stationCount = office.workstations.count
 
         GeometryReader { geo in
             // Uniform scale-to-fit of the 960×540 design canvas.
@@ -22,20 +23,26 @@ struct RoomView: View {
                             geo.size.height / RoomPlan.canvasSize.height)
 
             ZStack {
-                BlueprintCanvas(theme: theme)
+                BlueprintCanvas(theme: theme,
+                                stationNames: office.workstations.map(\.name))
                 MonitorLights(office: office, theme: theme)
 
                 // Paths under the dots, dots on top.
                 ForEach(office.sessions) { session in
-                    WalkPathView(session: session, theme: theme)
+                    WalkPathView(
+                        session: session,
+                        station: RoomPlan.station(index: session.stationIndex, of: stationCount),
+                        theme: theme
+                    )
                 }
                 ForEach(office.sessions) { session in
                     AgentDotView(
                         session: session,
+                        station: RoomPlan.station(index: session.stationIndex, of: stationCount),
                         seatCount: office.seatCount(onStation: session.stationIndex),
                         theme: theme
                     )
-                    // Fade/scale on session start & end. The panel wraps the
+                    // Fade/scale on session start & end. Callers wrap the
                     // structural mutations in `withAnimation` to trigger it.
                     .transition(.opacity.combined(with: .scale(scale: 0.4)))
                 }
@@ -50,19 +57,22 @@ struct RoomView: View {
 
 // ─────────────────────────────────────────────────────────────────────────
 // The static drawing: walls, grid, door, desks, labels, your desk.
+// Redrawn only when the station list or the theme changes.
 // ─────────────────────────────────────────────────────────────────────────
 
 private struct BlueprintCanvas: View {
 
     let theme: BlueprintTheme
+    let stationNames: [String]
 
     var body: some View {
         Canvas { context, _ in
             drawGrid(in: context)
             drawWallsAndDoor(in: context)
             drawDimensionLine(in: context)
-            for station in RoomPlan.stations {
-                draw(station: station, in: context)
+            for (index, name) in stationNames.enumerated() {
+                let station = RoomPlan.station(index: index, of: stationNames.count)
+                draw(station: station, named: name, in: context)
             }
             drawMyDesk(in: context)
         }
@@ -135,7 +145,8 @@ private struct BlueprintCanvas: View {
         context.stroke(dims, with: .color(theme.inkSoft), lineWidth: 1)
     }
 
-    private func draw(station: RoomPlan.Station, in context: GraphicsContext) {
+    private func draw(station: RoomPlan.Station, named name: String,
+                      in context: GraphicsContext) {
         // Desk; monitor as an outline — its light is a live overlay.
         context.stroke(Path(station.deskRect), with: .color(theme.ink),
                        style: StrokeStyle(lineWidth: 1.4))
@@ -150,7 +161,7 @@ private struct BlueprintCanvas: View {
 
         // Project name, lettered like a plan annotation.
         var label = context.resolve(
-            Text(station.name.uppercased())
+            Text(name.uppercased())
                 .font(.system(size: 10, design: .monospaced))
                 .kerning(2.5)
         )
@@ -189,9 +200,11 @@ private struct MonitorLights: View {
     let theme: BlueprintTheme
 
     var body: some View {
-        ForEach(RoomPlan.stations.indices, id: \.self) { index in
+        let count = office.workstations.count
+        ForEach(office.workstations.indices, id: \.self) { index in
             if office.hasWorkingAgent(onStation: index) {
-                BreathingBar(rect: RoomPlan.stations[index].monitorRect, theme: theme)
+                BreathingBar(rect: RoomPlan.station(index: index, of: count).monitorRect,
+                             theme: theme)
             }
         }
     }
@@ -226,6 +239,7 @@ private struct BreathingBar: View {
 private struct WalkPathView: View {
 
     let session: AgentSession
+    let station: RoomPlan.Station
     let theme: BlueprintTheme
 
     /// On screen for the whole trip: from standing up (only when the stand
@@ -241,8 +255,6 @@ private struct WalkPathView: View {
     }
 
     var body: some View {
-        let station = RoomPlan.stations[session.stationIndex]
-
         LineShape(from: station.standPoint(slot: session.seatSlot),
                   to: RoomPlan.arrival(deskSlot: session.deskSlot))
             // trim + dash = the line draws itself point by point. A cheap
@@ -275,12 +287,12 @@ private struct LineShape: Shape {
 private struct AgentDotView: View {
 
     let session: AgentSession
+    let station: RoomPlan.Station
     /// Occupants of this agent's station, for seat spreading.
     let seatCount: Int
     let theme: BlueprintTheme
 
     private var position: CGPoint {
-        let station = RoomPlan.stations[session.stationIndex]
         switch session.phase {
         case .seated:
             return station.seatPoint(slot: session.seatSlot, of: seatCount)
@@ -327,8 +339,9 @@ private struct AgentDotView: View {
         // Movement animation, keyed on the phase…
         .animation(transition, value: session.phase)
         // …plus a short slide when a colleague joins/leaves the station and
-        // the seat re-centers.
+        // the seat re-centers, or when the room re-spreads its desks.
         .animation(.easeInOut(duration: Choreo.standUp), value: seatCount)
+        .animation(.easeInOut(duration: Choreo.standUp), value: station)
     }
 
     /// Filled = working/finished · hollow = waiting on you · warn + cross =
