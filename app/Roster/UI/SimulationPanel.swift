@@ -25,8 +25,11 @@ struct SimulationPanel: View {
                         Button("+ \(office.workstations[index].name)") {
                             // withAnimation drives the dot's insertion
                             // transition (fade + scale) in RoomView.
+                            // `_ =` because startSession returns the new id
+                            // and withAnimation would otherwise adopt (and
+                            // propagate) that as its own return type.
                             withAnimation(.easeOut(duration: 0.45)) {
-                                office.startSession(onStation: index)
+                                _ = office.startSession(onStation: index)
                             }
                         }
                         .disabled(!office.canAddSession(onStation: index))
