@@ -64,13 +64,11 @@ struct RoomView: View {
     /// walk away. A card the user opened by hand is left alone.
     @State private var proximitySelectedID: Int?
 
-    /// The room is drawn LARGER than the window on purpose — Gather's
-    /// big plan. The camera follows you instead of shrinking the world,
-    /// and the floating detail card stops mattering: whatever it covers,
-    /// one step brings back into view. Zooming out to the range's floor
-    /// (~0.65) still shows the whole office at once.
-    private static let basePlan: CGFloat = 1.5
-    private static let zoomRange: ClosedRange<CGFloat> = 0.65...3
+    /// 100% = the whole office fits the window (the original behavior —
+    /// the floating card may cover a desk then, and that's accepted:
+    /// selecting pans the plan when zoomed, and one step of yours brings
+    /// anything back into view).
+    private static let zoomRange: ClosedRange<CGFloat> = 1...3
     /// The 3D layer needs an id for you; sessions start at 1, so -1 is safe.
     private static let youFigureID = -1
     /// The scroll anchor that rides on your feet (camera follow).
@@ -80,7 +78,7 @@ struct RoomView: View {
         let palette = PixelPalette.current(for: colorScheme)
 
         GeometryReader { geo in
-            let fit = RoomPlan.transform(in: geo.size).scale * Self.basePlan
+            let fit = RoomPlan.transform(in: geo.size).scale
             let scale = fit * zoom
             let content = CGSize(
                 width: max(geo.size.width, RoomPlan.size.width * scale),
@@ -262,7 +260,16 @@ struct RoomView: View {
                 Color.clear
                     .frame(width: carpet.width * scale, height: carpet.height * scale)
                     .contentShape(Rectangle())
-                    // The gesture attaches BEFORE `.position` — after it,
+                    // Double-click works on desks too: you hurry over, and
+                    // arriving opens the card by proximity. Locations are
+                    // local to the carpet frame, hence the small mapping.
+                    .onTapGesture(count: 2) { location in
+                        startAutoWalk(to: CGPoint(
+                            x: carpet.minX + location.x / scale,
+                            y: carpet.minY + location.y / scale
+                        ))
+                    }
+                    // The gestures attach BEFORE `.position` — after it,
                     // the positioned wrapper fills the whole room and one
                     // desk would swallow every click.
                     .onTapGesture {
