@@ -19,7 +19,7 @@ struct DetailCard: View {
         return office.workstations[session.stationIndex]
     }
 
-    private var name: String { workstation?.name ?? "unknown" }
+    private var name: String { office.displayName(for: session) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -42,19 +42,17 @@ struct DetailCard: View {
         .shadow(color: .black.opacity(0.25), radius: 14, y: 4)
     }
 
-    /// A big pixel portrait on a wash of the status color — the card's
-    /// Gather moment. Same sprite as in the room, just larger.
+    /// The 3D portrait on a wash of the status color — the card's Gather
+    /// moment. The same voxel colleague as in the room, slowly turning.
     private var portrait: some View {
         ZStack {
             session.status.uiColor.opacity(0.15)
-            PixelSprite(
-                look: SpriteLook.derive(from: name, slot: session.seatSlot),
-                pose: .standing,
-                scale: 5,
-                shadowColor: .black.opacity(0.15)
+            VoxelPortrait(
+                look: SpriteLook.derive(from: workstation?.id ?? "?",
+                                        slot: session.seatSlot)
             )
         }
-        .frame(height: 110)
+        .frame(height: 120)
         .overlay(alignment: .topTrailing) {
             Button(action: onClose) {
                 Image(systemName: "xmark")

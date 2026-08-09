@@ -1,19 +1,23 @@
+import AppKit
 import SwiftUI
 
 /// The pixel office. A static scene painted once in a `Canvas` (floor,
-/// walls, pods, lounge), with live layers on top: breathing monitor
-/// glows, the agents with their name pills, and you at your desk.
+/// walls, pods, lounge), the voxel 3D characters in a transparent
+/// SceneKit overlay, and regular SwiftUI on top: name pills, tap targets,
+/// the selection ring.
 ///
 /// The whole scene lives inside a two-axis `ScrollView`. At ×1 the room
-/// fits the window exactly, so nothing scrolls and everything looks as
-/// before; the zoom buttons grow the content so a crowded room can be
-/// inspected up close. Feeding the enlarged content size back into
-/// `RoomPlan.transform` yields exactly fit × zoom, so the canvas and the
-/// overlay layers keep sharing the one transform they always had.
+/// fits the window exactly; the zoom buttons grow the content so a
+/// crowded room can be inspected up close. Zooming is deliberately NOT
+/// animated: the 2D canvas and the 3D layer must land on the same frame
+/// at the same instant, and a snap is exactly what a pixel app does.
 ///
 /// Clicking an agent (or its desk) selects it — the detail card that
 /// opens on the right belongs to `ContentView`; the room only owns the
 /// selection value. Clicking the floor clears it, like in Gather.
+///
+/// The arrow keys move YOUR character. Walk anywhere; stop moving near
+/// your chair and you sit back down.
 struct RoomView: View {
 
     let office: Office
@@ -26,7 +30,17 @@ struct RoomView: View {
     /// empty margins around the scene, so the range starts at 1.
     @State private var zoom: CGFloat = 1
 
+    // ── Your character ──────────────────────────────────────────────────
+    @State private var youFeet: CGPoint = RoomPlan.youSeat
+    @State private var youWalking = false
+    /// The NSEvent monitor that feeds the arrow keys. Stored to remove it.
+    @State private var keyMonitor: Any?
+    /// Debounce: stop "walking" shortly after the last key event.
+    @State private var settleTask: Task<Void, Never>?
+
     private static let zoomRange: ClosedRange<CGFloat> = 1...3
+    /// The 3D layer needs an id for you; sessions start at 1, so -1 is safe.
+    private static let youFigureID = -1
 
     var body: some View {
         let palette = PixelPalette.current(for: colorScheme)
@@ -48,6 +62,12 @@ struct RoomView: View {
                     .padding(10)
             }
         }
+        .onAppear(perform: startListeningToArrowKeys)
+        .onDisappear {
+            if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
+            keyMonitor = nil
+            settleTask?.cancel()
+        }
     }
 
     /// Everything inside the scroll content, at one moment's transform.
@@ -65,8 +85,8 @@ struct RoomView: View {
                 .onTapGesture { selection = nil }
 
             // Invisible tap targets over each pod's carpet: clicking a
-            // desk selects whoever works there. The sprites above win the
-            // hit-test when you aim at them directly.
+            // desk selects whoever works there. The agent targets above
+            // win the hit-test when you aim at them directly.
             ForEach(office.workstations.indices, id: \.self) { index in
                 let carpet = RoomPlan.pod(index: index, of: stationCount).carpet
                 Color.clear
@@ -99,31 +119,149 @@ struct RoomView: View {
                 .position(map(CGPoint(x: RoomPlan.youScreen.midX, y: RoomPlan.youScreen.midY)))
                 .allowsHitTesting(false)
 
-            // You, at your desk.
-            PixelCharacter(
-                name: String(localized: "You"),
-                look: .you,
-                pose: .seated,
-                pillColor: Color(hex: 0x8A8F98),
+            // The bodies — one SceneKit overlay for everyone, you included.
+            // Clicks fall straight through it (see ClickThroughSCNView).
+            VoxelSceneView(
+                figures: figures(stationCount: stationCount),
                 scale: scale,
-                shadow: palette.shadow,
-                feet: map(RoomPlan.youSeat)
+                offset: offset,
+                contentSize: contentSize
             )
+            .frame(width: contentSize.width, height: contentSize.height)
+            .allowsHitTesting(false)
 
-            // The agents.
+            // Your name pill, floating above your head.
+            NamePill(name: String(localized: "You"), color: Color(hex: 0x8A8F98))
+                .position(x: map(youFeet).x,
+                          y: map(youFeet).y - VoxelBuilder.figureSize.height * scale - 12)
+                .animation(.linear(duration: 0.13), value: youFeet)
+                .allowsHitTesting(false)
+
+            // The agents' 2D halves: pill, tap target, selection ring.
             ForEach(office.sessions) { session in
-                PixelAgentView(
+                AgentOverlay(
                     office: office,
                     session: session,
-                    pod: RoomPlan.pod(index: session.stationIndex, of: stationCount),
-                    seatCount: office.seatCount(onStation: session.stationIndex),
+                    feetLogical: feet(of: session, stationCount: stationCount),
                     isSelected: selection == session.id,
                     scale: scale,
-                    palette: palette,
-                    map: map,
+                    offset: offset,
                     onTap: { selection = session.id }
                 )
-                .transition(.opacity.combined(with: .scale(scale: 0.4)))
+                .transition(.opacity)
+            }
+        }
+    }
+
+    // ── Figures for the 3D layer ────────────────────────────────────────
+
+    private func figures(stationCount: Int) -> [VoxelFigure] {
+        var list = office.sessions.map { session in
+            VoxelFigure(
+                id: session.id,
+                look: look(for: session),
+                feet: feet(of: session, stationCount: stationCount),
+                pose: pose(of: session),
+                moveDuration: session.phase == .walking || session.phase == .walkingBack
+                    ? Choreo.walk : Choreo.standUp,
+                linearMove: false
+            )
+        }
+        list.append(VoxelFigure(
+            id: Self.youFigureID,
+            look: .you,
+            feet: youFeet,
+            pose: youPose,
+            moveDuration: 0.13,
+            linearMove: true
+        ))
+        return list
+    }
+
+    /// Feet position in logical coordinates — the one place the phase
+    /// turns into geometry, shared by the 3D layer and the 2D overlays.
+    private func feet(of session: AgentSession, stationCount: Int) -> CGPoint {
+        let pod = RoomPlan.pod(index: session.stationIndex, of: stationCount)
+        switch session.phase {
+        case .seated:
+            return pod.seat(slot: session.seatSlot,
+                            of: office.seatCount(onStation: session.stationIndex))
+        case .standing, .walkingBack:
+            return pod.stand(slot: session.seatSlot)
+        case .walking, .atDesk:
+            return RoomPlan.arrival(deskSlot: session.deskSlot)
+        }
+    }
+
+    private func pose(of session: AgentSession) -> VoxelPose {
+        switch session.phase {
+        case .seated: return .seated
+        case .standing, .atDesk: return .standing
+        case .walking, .walkingBack: return .walking
+        }
+    }
+
+    /// The look derives from the workstation's ID (the repository path),
+    /// not its display name — two folders both named "api" get different
+    /// outfits, which is half the disambiguation.
+    private func look(for session: AgentSession) -> SpriteLook {
+        let key = office.workstations.indices.contains(session.stationIndex)
+            ? office.workstations[session.stationIndex].id
+            : "?"
+        return SpriteLook.derive(from: key, slot: session.seatSlot)
+    }
+
+    // ── Arrow keys ──────────────────────────────────────────────────────
+
+    private var youPose: VoxelPose {
+        if youWalking { return .walking }
+        return youFeet == RoomPlan.youSeat ? .seated : .standing
+    }
+
+    private func startListeningToArrowKeys() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Leave modified arrows (⌘←…) and text editing alone.
+            guard event.modifierFlags
+                .intersection([.command, .option, .control, .shift]).isEmpty,
+                  !(NSApp.keyWindow?.firstResponder is NSText)
+            else { return event }
+
+            switch event.keyCode {
+            case 123: move(dx: -1, dy: 0)   // ←
+            case 124: move(dx: 1, dy: 0)    // →
+            case 125: move(dx: 0, dy: 1)    // ↓
+            case 126: move(dx: 0, dy: -1)   // ↑
+            default: return event
+            }
+            return nil // consumed
+        }
+    }
+
+    /// One key event = one step. Key auto-repeat makes holding the key a
+    /// continuous walk; the linear per-step animation keeps it smooth.
+    private func move(dx: CGFloat, dy: CGFloat) {
+        let step: CGFloat = 4
+        withAnimation(.linear(duration: 0.13)) {
+            youFeet = CGPoint(
+                x: min(max(youFeet.x + dx * step, 8), RoomPlan.size.width - 8),
+                y: min(max(youFeet.y + dy * step, RoomPlan.wallHeight + 8),
+                       RoomPlan.size.height - 4)
+            )
+        }
+        youWalking = true
+
+        settleTask?.cancel()
+        settleTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(220))
+            guard !Task.isCancelled else { return }
+            youWalking = false
+            // Close enough to the chair: sit back down.
+            if abs(youFeet.x - RoomPlan.youSeat.x) < 7,
+               abs(youFeet.y - RoomPlan.youSeat.y) < 7 {
+                withAnimation(.linear(duration: 0.13)) {
+                    youFeet = RoomPlan.youSeat
+                }
             }
         }
     }
@@ -149,7 +287,7 @@ private struct ZoomControls: View {
                 zoom = max(range.lowerBound, zoom / step)
             }
             Button {
-                withAnimation(.easeInOut(duration: 0.2)) { zoom = range.lowerBound }
+                zoom = range.lowerBound
             } label: {
                 Text(verbatim: "\(Int((zoom * 100).rounded()))%")
                     .font(.caption.monospacedDigit())
@@ -170,9 +308,7 @@ private struct ZoomControls: View {
 
     private func button(_ symbol: String, help: LocalizedStringKey,
                         disabled: Bool, action: @escaping () -> Void) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) { action() }
-        } label: {
+        Button(action: action) {
             Image(systemName: symbol)
                 .font(.caption.weight(.semibold))
                 .frame(width: 22, height: 18)
@@ -359,45 +495,25 @@ private struct ScreenGlow: View {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// One agent: sprite + name pill, moved by the same phase machinery as
-// ever. The pill's dot carries the status color used across the app;
-// a click selects the agent (the detail card opens on the right).
+// One agent's 2D half: the name pill, the tap target and the selection
+// ring. The body itself lives in the SceneKit layer — this overlay rides
+// exactly on top of it, animated with the same durations, so the pill
+// follows the walk.
 // ─────────────────────────────────────────────────────────────────────────
 
-private struct PixelAgentView: View {
+private struct AgentOverlay: View {
 
     let office: Office
     let session: AgentSession
-    let pod: RoomPlan.Pod
-    let seatCount: Int
+    /// Feet position in LOGICAL coordinates. The overlay maps them itself,
+    /// so the animation can key on the logical value: a walk animates, but
+    /// a zoom (which only changes the mapping) snaps — in step with the
+    /// 3D layer, which follows the same rule.
+    let feetLogical: CGPoint
     let isSelected: Bool
     let scale: CGFloat
-    let palette: PixelPalette
-    let map: (CGPoint) -> CGPoint
+    let offset: CGPoint
     let onTap: () -> Void
-
-    private var name: String {
-        office.workstations.indices.contains(session.stationIndex)
-            ? office.workstations[session.stationIndex].name
-            : "?"
-    }
-
-    private var feet: CGPoint {
-        switch session.phase {
-        case .seated:
-            return pod.seat(slot: session.seatSlot, of: seatCount)
-        case .standing:
-            return pod.stand(slot: session.seatSlot)
-        case .walking, .atDesk:
-            return RoomPlan.arrival(deskSlot: session.deskSlot)
-        case .walkingBack:
-            return pod.stand(slot: session.seatSlot)
-        }
-    }
-
-    private var isWalking: Bool {
-        session.phase == .walking || session.phase == .walkingBack
-    }
 
     private var transition: Animation {
         switch session.phase {
@@ -409,24 +525,19 @@ private struct PixelAgentView: View {
     }
 
     var body: some View {
-        let mapped = map(feet)
-        let spriteHeight = PixelSprite.logicalSize.height * scale
+        let bodyHeight = VoxelBuilder.figureSize.height * scale
+        let bodyWidth = VoxelBuilder.figureSize.width * scale
         let pillHeight: CGFloat = 20
+        let feet = CGPoint(x: offset.x + feetLogical.x * scale,
+                           y: offset.y + feetLogical.y * scale)
 
         VStack(spacing: 2) {
-            NamePill(name: name, color: session.status.uiColor)
-            // The step timer only ticks while this agent walks.
-            TimelineView(.animation(minimumInterval: 0.14, paused: !isWalking)) { timeline in
-                let frame = Int(timeline.date.timeIntervalSinceReferenceDate / 0.14) % 2
-                PixelSprite(
-                    look: SpriteLook.derive(from: name, slot: session.seatSlot),
-                    pose: pose(frame: frame),
-                    scale: scale,
-                    shadowColor: palette.shadow
-                )
-            }
+            NamePill(name: office.displayName(for: session),
+                     color: session.status.uiColor)
+            // The invisible half: where the 3D body stands, for clicking.
+            Color.clear
+                .frame(width: bodyWidth + 4, height: bodyHeight)
         }
-        // The selection ring, on the ground under the agent's feet.
         .background(alignment: .bottom) {
             if isSelected {
                 Ellipse()
@@ -438,41 +549,7 @@ private struct PixelAgentView: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: onTap)
         // Feet-anchored: the container's center sits half its height above.
-        .position(x: mapped.x, y: mapped.y - (spriteHeight + pillHeight + 2) / 2)
-        .animation(transition, value: session.phase)
-        .animation(.easeInOut(duration: Choreo.standUp), value: seatCount)
-    }
-
-    private func pose(frame: Int) -> SpritePose {
-        switch session.phase {
-        case .seated: return .seated
-        case .standing, .atDesk: return .standing
-        case .walking, .walkingBack: return .walking(frame: frame)
-        }
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// You, seated at your desk. Not clickable — you know what you did.
-// ─────────────────────────────────────────────────────────────────────────
-
-private struct PixelCharacter: View {
-
-    let name: String
-    let look: SpriteLook
-    let pose: SpritePose
-    let pillColor: Color
-    let scale: CGFloat
-    let shadow: Color
-    let feet: CGPoint
-
-    var body: some View {
-        let spriteHeight = PixelSprite.logicalSize.height * scale
-        VStack(spacing: 2) {
-            NamePill(name: name, color: pillColor)
-            PixelSprite(look: look, pose: pose, scale: scale, shadowColor: shadow)
-        }
-        .position(x: feet.x, y: feet.y - (spriteHeight + 22) / 2)
-        .allowsHitTesting(false)
+        .position(x: feet.x, y: feet.y - (bodyHeight + pillHeight + 2) / 2)
+        .animation(transition, value: feetLogical)
     }
 }
