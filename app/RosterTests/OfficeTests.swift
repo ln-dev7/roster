@@ -69,6 +69,32 @@ final class OfficeTests: XCTestCase {
                        "sessions after the removed desk shift down")
     }
 
+    // MARK: Display names
+
+    func testTwinFoldersShowTheirParentFolder() {
+        let office = Office(sleeper: { _ in })
+        _ = office.workstationIndex(forPath: "/work/backend/api")
+        _ = office.workstationIndex(forPath: "/work/client/api")
+        _ = office.workstationIndex(forPath: "/work/blog")
+
+        XCTAssertEqual(office.displayName(forStation: 0), "backend/api")
+        XCTAssertEqual(office.displayName(forStation: 1), "client/api")
+        XCTAssertEqual(office.displayName(forStation: 2), "blog",
+                       "a unique name needs no qualifier")
+    }
+
+    func testAgentsSharingADeskGetSeatNumbers() {
+        let office = makeInstantOffice()
+        let first = office.sessions[0]
+        XCTAssertEqual(office.displayName(for: first), "circle",
+                       "a lone agent wears the plain project name")
+
+        _ = office.startSession(onStation: 0)
+        let mates = office.sessions.filter { $0.stationIndex == 0 }
+        XCTAssertEqual(Set(mates.map { office.displayName(for: $0) }),
+                       ["circle · 1", "circle · 2"])
+    }
+
     // MARK: Waiting for input
 
     func testNeedsInputStandsUpAndAnswerSitsBackDown() {

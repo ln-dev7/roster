@@ -120,9 +120,7 @@ private struct SidebarSessionRow: View {
     @Binding var selection: Int?
 
     private var name: String {
-        office.workstations.indices.contains(session.stationIndex)
-            ? office.workstations[session.stationIndex].name
-            : "?"
+        office.displayName(for: session)
     }
 
     var body: some View {

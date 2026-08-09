@@ -150,6 +150,32 @@ final class Office {
         }
     }
 
+    // MARK: Display names
+    //
+    // Two collisions can make the room ambiguous, and each gets its own
+    // cure: two open projects with the same folder name ("api" twice)
+    // gain their parent folder ("backend/api" vs "client/api"), and two
+    // sessions sharing one desk gain a seat number ("circle · 2").
+
+    /// The name shown for a station, disambiguated against its twins.
+    func displayName(forStation stationIndex: Int) -> String {
+        guard workstations.indices.contains(stationIndex) else { return "?" }
+        let station = workstations[stationIndex]
+        let twins = workstations.filter { $0.name == station.name }
+        guard twins.count > 1, let path = station.path else { return station.name }
+        let parent = ((path as NSString).deletingLastPathComponent as NSString)
+            .lastPathComponent
+        return parent.isEmpty ? station.name : "\(parent)/\(station.name)"
+    }
+
+    /// The name on an agent's pill: the station name, plus a seat number
+    /// when two sessions share the desk.
+    func displayName(for session: AgentSession) -> String {
+        let base = displayName(forStation: session.stationIndex)
+        guard seatCount(onStation: session.stationIndex) > 1 else { return base }
+        return "\(base) · \(session.seatSlot + 1)"
+    }
+
     // MARK: Workstations
 
     /// Returns the station index for a repository, creating the desk on
