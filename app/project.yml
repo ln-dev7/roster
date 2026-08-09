@@ -78,15 +78,19 @@ targets:
         NSHighResolutionCapable: true
         CFBundleIconName: AppIcon
 
-        # ── Sparkle (dormant) ────────────────────────────────────────────
-        # SUFeedURL and SUPublicEDKey are deliberately absent: without a
-        # feed the updater never starts (see UpdaterModel). At site launch,
-        # add:
-        #   SUFeedURL: "https://roster.lndev.me/appcast.xml"
-        #   SUPublicEDKey: "<output of Sparkle's generate_keys>"
+        # ── Sparkle (live) ───────────────────────────────────────────────
+        # The site serves the feed; the public key matches the EdDSA pair
+        # in the keychain (shared with DockKeep — one publisher, one key).
+        # build.sh signs each .dmg with the private half; Sparkle on the
+        # user's Mac verifies against this public half before installing.
+        SUFeedURL: "https://roster.lndev.me/appcast.xml"
+        SUPublicEDKey: "GKSl+/DCJn+VeBNlcRtehhOxKxLB9J+qMGYEHv+pq1s="
+        # Check on a schedule without asking on first launch; installing
+        # still goes through the user (calm by default, like the room).
+        SUEnableAutomaticChecks: true
         # Off, and stated plainly: no hardware profile ever leaves the Mac.
         SUEnableSystemProfiling: false
-        # Once a day is plenty, once checking exists at all.
+        # Once a day is plenty.
         SUScheduledCheckInterval: 86400
 
     settings:

@@ -5,12 +5,12 @@ import SwiftUI
 /// Owns Sparkle's updater for the whole life of the app — Sparkle wants
 /// exactly one, created once (same pattern as DockKeep).
 ///
-/// **Wired but silent**: the app ships without `SUFeedURL` in its
-/// Info.plist, and without a feed there is nothing to check against, so
-/// the updater is not even started — no scheduling, no first-launch
-/// permission prompt, no network. The day roster.lndev.me serves the
-/// appcast, adding `SUFeedURL` and `SUPublicEDKey` to project.yml turns
-/// the whole path on without touching this file.
+/// **Live since 0.2.0**: Info.plist carries `SUFeedURL` (the appcast on
+/// roster.lndev.me) and `SUPublicEDKey`, so the updater starts, checks
+/// once a day, and offers updates whose signature verifies against the
+/// key. The guard below still protects the other direction: strip the
+/// feed from project.yml and the whole path goes silent again — no
+/// scheduling, no prompt, no network.
 ///
 /// This is the one type in Roster using `ObservableObject` rather than
 /// `@Observable`: `canCheckForUpdates` is a KVO property on Sparkle's

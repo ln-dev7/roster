@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Roster's Sparkle update feed. release.sh appends one <item> per
+     release via scripts/make-appcast.py; installed copies check this URL
+     once a day. An empty channel is a valid feed that simply means
+     "you're up to date". -->
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>Roster</title>
+    <link>https://roster.lndev.me/appcast.xml</link>
+    <description>Updates for Roster, the little office for your coding agents.</description>
+    <language>en</language>
+  </channel>
+</rss>
