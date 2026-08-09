@@ -14,10 +14,10 @@ import SwiftUI
 /// at the same instant, and a snap is exactly what a pixel app does.
 ///
 /// Named spots in the office. Walking into one does something: a
-/// colleague's pod opens its card, everywhere else shows a tip bubble.
+/// colleague's pod opens its card, the fun corners show a tip bubble.
+/// Your own desk deliberately does nothing — it's home, not a stop.
 private enum Place: Equatable {
     case station(Int)
-    case yourDesk
     case lounge
     case pingPong
 }
@@ -51,9 +51,9 @@ struct RoomView: View {
     @State private var pressedArrows: Set<UInt16> = []
     /// The 60 Hz walk loop; alive exactly while a key is held.
     @State private var walkLoop: Task<Void, Never>?
-    /// The auto-walk home ("Back to your desk" button). Any arrow key
-    /// cancels it — you take the wheel back.
-    @State private var returnTask: Task<Void, Never>?
+    /// The auto-walk (double-click a spot, or the "Back to your desk"
+    /// button). Any arrow key cancels it — you take the wheel back.
+    @State private var autoWalkTask: Task<Void, Never>?
     /// The NSEvent monitor that feeds the arrow keys. Stored to remove it.
     @State private var keyMonitor: Any?
 
@@ -69,28 +69,45 @@ struct RoomView: View {
     private static let youFigureID = -1
     /// The scroll anchor that rides on your feet (camera follow).
     private static let youAnchorID = "you-anchor"
+    /// Width the open detail card claims on the right (300 + paddings).
+    private static let cardInset: CGFloat = 324
 
     var body: some View {
         let palette = PixelPalette.current(for: colorScheme)
 
         GeometryReader { geo in
-            let fit = RoomPlan.transform(in: geo.size).scale
+            // When the detail card is open it covers a strip on the right;
+            // the scene rescales and recenters in what remains, so the
+            // card only ever sits on floor tiles — never on a desk. The
+            // plan shifts to make room, Gather-style.
+            let inset: CGFloat = selection != nil ? Self.cardInset : 0
+            let fit = RoomPlan.transform(
+                in: CGSize(width: geo.size.width - inset, height: geo.size.height)
+            ).scale
+            let scale = fit * zoom
             let content = CGSize(
-                width: max(geo.size.width, RoomPlan.size.width * fit * zoom),
-                height: max(geo.size.height, RoomPlan.size.height * fit * zoom)
+                width: max(geo.size.width, RoomPlan.size.width * scale + inset),
+                height: max(geo.size.height, RoomPlan.size.height * scale)
+            )
+            let offset = CGPoint(
+                x: (content.width - inset - RoomPlan.size.width * scale) / 2,
+                y: (content.height - RoomPlan.size.height * scale) / 2
             )
 
             ScrollViewReader { proxy in
                 ScrollView([.horizontal, .vertical]) {
-                    room(contentSize: content, palette: palette)
+                    room(scale: scale, offset: offset,
+                         contentSize: content, palette: palette)
                         .frame(width: content.width, height: content.height)
                 }
                 .background(palette.floorB)
                 .overlay(alignment: .bottomTrailing) {
                     HStack(spacing: 8) {
                         if youFeet != RoomPlan.youSeat {
-                            BackToDeskButton(action: startReturnToDesk)
-                                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                            BackToDeskButton {
+                                startAutoWalk(to: RoomPlan.youSeat)
+                            }
+                            .transition(.opacity.combined(with: .scale(scale: 0.8)))
                         }
                         ZoomControls(zoom: $zoom, range: Self.zoomRange)
                     }
@@ -124,8 +141,8 @@ struct RoomView: View {
             keyMonitor = nil
             walkLoop?.cancel()
             walkLoop = nil
-            returnTask?.cancel()
-            returnTask = nil
+            autoWalkTask?.cancel()
+            autoWalkTask = nil
         }
         // If the app loses focus mid-walk the keyUp never reaches us —
         // clear the keys so nobody walks into a wall forever.
@@ -164,7 +181,6 @@ struct RoomView: View {
                 return .station(index)
             }
         }
-        if RoomPlan.youZone.contains(feet) { return .yourDesk }
         if RoomPlan.Furniture.loungeZone.insetBy(dx: -4, dy: -4).contains(feet) {
             return .lounge
         }
@@ -201,15 +217,25 @@ struct RoomView: View {
 
     /// Everything inside the scroll content, at one moment's transform.
     @ViewBuilder
-    private func room(contentSize: CGSize, palette: PixelPalette) -> some View {
+    private func room(scale: CGFloat, offset: CGPoint,
+                      contentSize: CGSize, palette: PixelPalette) -> some View {
         let stationCount = office.workstations.count
-        let (scale, offset) = RoomPlan.transform(in: contentSize)
         let map = { (p: CGPoint) in
             CGPoint(x: offset.x + p.x * scale, y: offset.y + p.y * scale)
         }
 
         ZStack {
-            PixelSceneCanvas(palette: palette, stationCount: stationCount)
+            PixelSceneCanvas(palette: palette, stationCount: stationCount,
+                             scale: scale, offset: offset)
+                // Double-clicking the floor sends you there, Gather-style
+                // (declared BEFORE the single tap so it wins the race).
+                .onTapGesture(count: 2) { location in
+                    let logical = CGPoint(
+                        x: (location.x - offset.x) / scale,
+                        y: (location.y - offset.y) / scale
+                    )
+                    startAutoWalk(to: logical)
+                }
                 // Clicking the floor deselects — the card slides away.
                 .onTapGesture { selection = nil }
 
@@ -376,8 +402,8 @@ struct RoomView: View {
                 // the clock, the keyboard only says which keys are held.
                 if !event.isARepeat {
                     // Touching the arrows takes over from the auto-walk.
-                    returnTask?.cancel()
-                    returnTask = nil
+                    autoWalkTask?.cancel()
+                    autoWalkTask = nil
                     pressedArrows.insert(event.keyCode)
                     startWalkLoopIfNeeded()
                 }
@@ -443,15 +469,29 @@ struct RoomView: View {
         )
     }
 
-    /// The "Back to your desk" button: walks you home at walking speed —
-    /// the same loop as the arrows, just steering itself. Ends seated.
-    private func startReturnToDesk() {
+    /// The auto-walk: double-click a spot (or press "Back to your desk")
+    /// and you hurry there — brisker than the arrow keys, because a
+    /// destination is a decision. Ends seated when the target is close
+    /// enough to your chair.
+    private func startAutoWalk(to destination: CGPoint) {
+        // Clamp into the walkable floor, and snap chair-adjacent targets
+        // onto the chair so arriving means sitting down.
+        var target = CGPoint(
+            x: min(max(destination.x, 8), RoomPlan.size.width - 8),
+            y: min(max(destination.y, RoomPlan.wallHeight + 8),
+                   RoomPlan.size.height - 4)
+        )
+        if abs(target.x - RoomPlan.youSeat.x) < 10,
+           abs(target.y - RoomPlan.youSeat.y) < 10 {
+            target = RoomPlan.youSeat
+        }
+
         pressedArrows.removeAll()
-        returnTask?.cancel()
+        autoWalkTask?.cancel()
         youWalking = true
-        returnTask = Task { @MainActor in
+        autoWalkTask = Task { @MainActor in
             var lastTick = ContinuousClock.now
-            let speed: CGFloat = 62
+            let speed: CGFloat = 130 // in a hurry — roughly twice the stroll
             while !Task.isCancelled, pressedArrows.isEmpty {
                 try? await Task.sleep(for: .milliseconds(16))
                 let now = ContinuousClock.now
@@ -462,18 +502,18 @@ struct RoomView: View {
                         + Double(elapsed.components.attoseconds) * 1e-18,
                     0.05
                 )
-                let dx = RoomPlan.youSeat.x - youFeet.x
-                let dy = RoomPlan.youSeat.y - youFeet.y
+                let dx = target.x - youFeet.x
+                let dy = target.y - youFeet.y
                 let distance = (dx * dx + dy * dy).squareRoot()
                 let stride = speed * CGFloat(dt)
                 if distance <= stride {
-                    youFeet = RoomPlan.youSeat
+                    youFeet = target
                     break
                 }
                 youFeet = CGPoint(x: youFeet.x + dx / distance * stride,
                                   y: youFeet.y + dy / distance * stride)
             }
-            returnTask = nil
+            autoWalkTask = nil
             if pressedArrows.isEmpty { youWalking = false }
         }
     }
@@ -516,16 +556,14 @@ private struct TipBubble: View {
     private var icon: String {
         switch place {
         case .lounge: return "sofa.fill"
-        case .pingPong: return "figure.table.tennis"
-        case .yourDesk, .station: return "desktopcomputer"
+        case .pingPong, .station: return "figure.table.tennis"
         }
     }
 
     private var title: LocalizedStringKey {
         switch place {
         case .lounge: return "The lounge"
-        case .pingPong: return "The ping-pong table"
-        case .yourDesk, .station: return "Your desk"
+        case .pingPong, .station: return "The ping-pong table"
         }
     }
 
@@ -533,10 +571,8 @@ private struct TipBubble: View {
         switch place {
         case .lounge:
             return "Agents never take a break — you're allowed to. Tip: ⌥⌘T keeps the room floating on top while you work."
-        case .pingPong:
+        case .pingPong, .station:
             return "Always free: the agents forfeit by default. Tip: hold two arrow keys to walk diagonally."
-        case .yourDesk, .station:
-            return "Finished agents queue up right here until you review them. Tip: clicking the floor closes any open card."
         }
     }
 
@@ -626,11 +662,14 @@ private struct PixelSceneCanvas: View {
 
     let palette: PixelPalette
     let stationCount: Int
+    /// The shared transform, injected: the room may be recentered inside
+    /// its content (detail-card inset), so the canvas must not compute
+    /// its own.
+    let scale: CGFloat
+    let offset: CGPoint
 
     var body: some View {
         Canvas { context, size in
-            let (scale, offset) = RoomPlan.transform(in: size)
-
             func fill(_ rect: CGRect, _ color: Color) {
                 context.fill(
                     Path(CGRect(x: offset.x + rect.minX * scale,

@@ -56,14 +56,12 @@ struct ContentView: View {
                         EmptyView()
                     }
 
-                    // The room, with the Gather-style detail card BESIDE
-                    // it. The card pushes the room instead of covering it —
-                    // the room rescales to the remaining width, so the desk
-                    // you just walked up to is never hidden behind its own
-                    // card. Not animated: the 3D layer repositions
-                    // instantly on layout changes, so the 2D room does too
-                    // (same rule as the zoom and the sidebar).
-                    HStack(alignment: .top, spacing: 0) {
+                    // The room, with the Gather-style detail card floating
+                    // over its right edge. The card only ever covers FLOOR:
+                    // RoomView reads the selection and recenters the scene
+                    // in the uncovered width (the plan shifts, the desks
+                    // stay visible) — see the inset logic in RoomView.
+                    ZStack(alignment: .topTrailing) {
                         RoomView(office: office, selection: $selectedSessionID)
                             .overlay(alignment: .bottomLeading) {
                                 SidebarToggle(showSidebar: $showSidebar)
