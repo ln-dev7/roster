@@ -34,6 +34,9 @@ final class ClaudeCodeSource {
     private(set) var state: ConnectionState = .checking
     /// Spool lines accepted so far — visible in logs, handy when debugging.
     private(set) var eventsProcessed = 0
+    /// All Claude config roots currently known (~/.claude, ~/.claude-pro,
+    /// user-added folders…). Settings displays and manages this list.
+    private(set) var roots: [URL] = []
 
     private let office: Office
     @ObservationIgnored private var watcher: SpoolWatcher?
@@ -56,11 +59,6 @@ final class ClaudeCodeSource {
             .appending(path: "Library/Application Support/Roster/events.jsonl")
     }
 
-    private static var projectsURL: URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appending(path: ".claude/projects")
-    }
-
     init(office: Office) {
         self.office = office
     }
@@ -69,35 +67,53 @@ final class ClaudeCodeSource {
         rescanTask?.cancel()
     }
 
-    /// Called once at launch.
+    /// True when every known root carries the current hook set.
+    var allRootsInstalled: Bool {
+        !roots.isEmpty && roots.allSatisfy {
+            HookInstaller.isInstalled(at: $0.appending(path: "settings.json"))
+        }
+    }
+
+    /// Called at launch and whenever the root list may have changed
+    /// (Settings adds a folder, an alias creates a new config dir…).
     ///
     /// The feeds start in EVERY case: the transcript scan is read-only and
     /// harmless, so real sessions appear in the room automatically, hook
     /// or not. What consent gates is only the *write* — installing the
-    /// hook into ~/.claude/settings.json, which unlocks the rich states
-    /// (waiting for input, finished, failed) and the walk.
+    /// hooks into each root's settings.json, which unlocks the rich
+    /// states (waiting for input, finished, failed) and the walk.
     func refresh() {
-        if HookInstaller.isInstalled() {
-            log.info("hook already installed")
+        roots = ClaudeConfigRoots.discover()
+        if allRootsInstalled {
+            log.info("hooks installed in all \(self.roots.count) root(s)")
             state = .connected
         } else {
-            log.info("hook not installed; presence-only until consent")
+            log.info("hooks missing in at least one root; presence-only until consent")
             state = .notConnected
         }
         startFeeds()
     }
 
-    /// The consent button. Installs (or upgrades) the hook set — with a
-    /// backup. The feeds are already running; from here the spool starts
-    /// filling. Errors land in `state` for the banner to display.
+    /// The consent button. Installs (or upgrades) the hook set in EVERY
+    /// known root — each with its own backup. The feeds are already
+    /// running; from here the spools start filling. The first error lands
+    /// in `state` for the banner to display.
     func connect() {
-        do {
-            try HookInstaller.install()
-            log.info("hook installed")
+        roots = ClaudeConfigRoots.discover()
+        var firstError: Error?
+        for root in roots {
+            do {
+                try HookInstaller.install(at: root.appending(path: "settings.json"))
+                log.info("hooks installed in \(root.path, privacy: .public)")
+            } catch {
+                log.error("hook install failed in \(root.path, privacy: .public): \(error.localizedDescription)")
+                firstError = firstError ?? error
+            }
+        }
+        if let firstError {
+            state = .failed(firstError.localizedDescription)
+        } else {
             state = .connected
-        } catch {
-            log.error("hook install failed: \(error.localizedDescription)")
-            state = .failed(error.localizedDescription)
         }
     }
 
@@ -167,34 +183,37 @@ final class ClaudeCodeSource {
 
     private func scanTranscripts() {
         let fm = FileManager.default
-        guard let projectDirs = try? fm.contentsOfDirectory(
-            at: Self.projectsURL, includingPropertiesForKeys: nil
-        ) else {
-            log.debug("no ~/.claude/projects to scan")
-            return
-        }
+        // Aliases can create a new config root at any time.
+        roots = ClaudeConfigRoots.discover()
 
         var found = 0
-        for dir in projectDirs {
-            guard let files = try? fm.contentsOfDirectory(
-                at: dir, includingPropertiesForKeys: [.contentModificationDateKey]
+        for root in roots {
+            let projects = root.appending(path: "projects")
+            guard let projectDirs = try? fm.contentsOfDirectory(
+                at: projects, includingPropertiesForKeys: nil
             ) else { continue }
 
-            for transcript in files where transcript.pathExtension == "jsonl" {
-                guard let modified = modificationDate(of: transcript) else { continue }
-                let key = transcript.deletingPathExtension().lastPathComponent
+            for dir in projectDirs {
+                guard let files = try? fm.contentsOfDirectory(
+                    at: dir, includingPropertiesForKeys: [.contentModificationDateKey]
+                ) else { continue }
 
-                if Date().timeIntervalSince(modified) < aliveWindow {
-                    transcripts[key] = transcript
-                    guard let cwd = Self.cwd(fromTranscript: transcript) else { continue }
-                    // Idempotent: a session already in the room is a no-op.
-                    office.apply(.sessionStart(key: key, cwd: cwd))
-                    found += 1
+                for transcript in files where transcript.pathExtension == "jsonl" {
+                    guard let modified = modificationDate(of: transcript) else { continue }
+                    let key = transcript.deletingPathExtension().lastPathComponent
+
+                    if Date().timeIntervalSince(modified) < aliveWindow {
+                        transcripts[key] = transcript
+                        guard let cwd = Self.cwd(fromTranscript: transcript) else { continue }
+                        // Idempotent: a session already in the room is a no-op.
+                        office.apply(.sessionStart(key: key, cwd: cwd))
+                        found += 1
+                    }
                 }
             }
         }
         if found > 0 {
-            log.info("transcript scan: \(found) live session(s)")
+            log.info("transcript scan: \(found) live session(s) across \(self.roots.count) root(s)")
         }
         persistWorkstationsIfNeeded()
 

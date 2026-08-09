@@ -4,18 +4,31 @@ import SwiftUI
 ///
 /// `@main` marks the struct launched at startup. An `App` holds scenes; a
 /// `WindowGroup` describes a standard macOS window. One window is the whole
-/// product for now — the room *is* the app.
+/// product — the room *is* the app.
+///
+/// The office and its data source are created HERE, once, because two
+/// scenes need them: the room window and the Settings window. (Same
+/// reasoning as DockKeep's updater living in the App struct.)
 @main
 struct RosterApp: App {
 
-    /// Same storage keys as ContentView: the menus drive what the window
-    /// does. `@AppStorage` persists both across launches.
+    @State private var office: Office
+    @State private var source: ClaudeCodeSource
+
+    /// Same storage keys as ContentView/Settings: the menus drive what the
+    /// window does. `@AppStorage` persists them across launches.
     @AppStorage("showSimulationPanel") private var showSimulationPanel = false
     @AppStorage("keepOnTop") private var keepOnTop = false
 
+    init() {
+        let office = Office()
+        _office = State(initialValue: office)
+        _source = State(initialValue: ClaudeCodeSource(office: office))
+    }
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(office: office, source: source)
         }
         // Content runs to the top edge; the traffic lights float over it.
         // The room looks better without a title bar chopping it off.
@@ -39,6 +52,11 @@ struct RosterApp: App {
                 Toggle("Show Simulation Panel", isOn: $showSimulationPanel)
                     .keyboardShortcut("d", modifiers: [.command, .shift])
             }
+        }
+
+        // Gives "Settings…" its usual place in the app menu and ⌘, for free.
+        Settings {
+            SettingsView(office: office, source: source)
         }
     }
 }

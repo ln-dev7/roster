@@ -5,24 +5,17 @@ import SwiftUI
 /// menu — it doubles as the GIF-recording studio).
 struct ContentView: View {
 
-    /// One `Office`, one source feeding it. Created together here so the
-    /// source can hold the office; `@State` keeps both alive for the life
-    /// of the window.
-    @State private var office: Office
-    @State private var source: ClaudeCodeSource
+    /// Owned by `RosterApp` (the Settings scene needs them too); this view
+    /// only uses them.
+    let office: Office
+    let source: ClaudeCodeSource
 
     /// Toggled from the Debug menu (same key there).
     @AppStorage("showSimulationPanel") private var showSimulationPanel = false
 
-    /// Toggled from the View menu (same key there): floating window level,
-    /// so the room stays visible in a corner while you work.
+    /// Toggled from the View menu and Settings (same key): floating window
+    /// level, so the room stays visible in a corner while you work.
     @AppStorage("keepOnTop") private var keepOnTop = false
-
-    init() {
-        let office = Office()
-        _office = State(initialValue: office)
-        _source = State(initialValue: ClaudeCodeSource(office: office))
-    }
 
     private var isPanelVisible: Bool {
         // Before connection the panel is the only way to see the product
@@ -56,7 +49,11 @@ struct ContentView: View {
             // app layer decides what it means. [weak office] breaks the
             // cycle (the closure is stored on the office itself).
             office.onAgentArrived = { [weak office] session in
-                guard let office,
+                // Live read so the Settings toggle applies immediately.
+                let wantsNotification = (UserDefaults.standard
+                    .object(forKey: "notifyOnArrival") as? Bool) ?? true
+                guard wantsNotification,
+                      let office,
                       office.workstations.indices.contains(session.stationIndex)
                 else { return }
                 Notifier.agentArrived(
@@ -65,6 +62,9 @@ struct ContentView: View {
             }
             Notifier.requestPermissionIfNeeded()
 
+            // Settings persisted from previous launches.
+            office.finishThreshold = (UserDefaults.standard
+                .object(forKey: "finishThreshold") as? Double) ?? 45
             WindowLevel.apply(keepOnTop: keepOnTop)
 
             source.refresh()
@@ -126,5 +126,6 @@ private struct ErrorBanner: View {
 }
 
 #Preview {
-    ContentView()
+    let office = Office()
+    return ContentView(office: office, source: ClaudeCodeSource(office: office))
 }

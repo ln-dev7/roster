@@ -109,6 +109,7 @@ targets:
       - path: Roster/Core/RoomPlan.swift
       - path: Roster/Data/HookInstaller.swift
       - path: Roster/Data/WorkstationStore.swift
+      - path: Roster/Data/ClaudeConfigRoots.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.lndev.roster.tests
