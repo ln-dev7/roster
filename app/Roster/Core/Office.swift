@@ -34,6 +34,28 @@ enum AgentPhase: Equatable {
     case walkingBack
 }
 
+/// Which tool runs a session. Only Claude Code today — the seam for the
+/// others is AgentProvider.swift + docs/providers.md. Each desk wears its
+/// provider's logo, so tomorrow's mixed office reads at a glance.
+enum ProviderKind: String, Equatable {
+    case claudeCode
+
+    /// Name of the bundled logo asset (sourced from logos.lndev.me;
+    /// the marks belong to their respective owners).
+    var logoAssetName: String {
+        switch self {
+        case .claudeCode: return "ProviderClaude"
+        }
+    }
+
+    /// Shown on the detail card. A product name — never localized.
+    var displayName: String {
+        switch self {
+        case .claudeCode: return "Claude Code"
+        }
+    }
+}
+
 /// One desk in the room = one SESSION. Two terminals in the same folder
 /// are two colleagues, and colleagues don't share chairs — each gets its
 /// own desk (numbered "circle · 1", "circle · 2" when needed). A desk
@@ -47,6 +69,8 @@ struct Workstation: Identifiable, Equatable {
     var name: String
     /// Filesystem path of the repository, when this is a real project.
     var path: String?
+    /// The tool whose session sits here.
+    var provider: ProviderKind = .claudeCode
 }
 
 /// One live agent session. A value type on purpose: replacing an element of

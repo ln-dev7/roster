@@ -64,33 +64,30 @@ struct RoomView: View {
     /// walk away. A card the user opened by hand is left alone.
     @State private var proximitySelectedID: Int?
 
-    private static let zoomRange: ClosedRange<CGFloat> = 1...3
+    /// The room is drawn LARGER than the window on purpose — Gather's
+    /// big plan. The camera follows you instead of shrinking the world,
+    /// and the floating detail card stops mattering: whatever it covers,
+    /// one step brings back into view. Zooming out to the range's floor
+    /// (~0.65) still shows the whole office at once.
+    private static let basePlan: CGFloat = 1.5
+    private static let zoomRange: ClosedRange<CGFloat> = 0.65...3
     /// The 3D layer needs an id for you; sessions start at 1, so -1 is safe.
     private static let youFigureID = -1
     /// The scroll anchor that rides on your feet (camera follow).
     private static let youAnchorID = "you-anchor"
-    /// Width the open detail card claims on the right (300 + paddings).
-    private static let cardInset: CGFloat = 324
 
     var body: some View {
         let palette = PixelPalette.current(for: colorScheme)
 
         GeometryReader { geo in
-            // When the detail card is open it covers a strip on the right;
-            // the scene rescales and recenters in what remains, so the
-            // card only ever sits on floor tiles — never on a desk. The
-            // plan shifts to make room, Gather-style.
-            let inset: CGFloat = selection != nil ? Self.cardInset : 0
-            let fit = RoomPlan.transform(
-                in: CGSize(width: geo.size.width - inset, height: geo.size.height)
-            ).scale
+            let fit = RoomPlan.transform(in: geo.size).scale * Self.basePlan
             let scale = fit * zoom
             let content = CGSize(
-                width: max(geo.size.width, RoomPlan.size.width * scale + inset),
+                width: max(geo.size.width, RoomPlan.size.width * scale),
                 height: max(geo.size.height, RoomPlan.size.height * scale)
             )
             let offset = CGPoint(
-                x: (content.width - inset - RoomPlan.size.width * scale) / 2,
+                x: (content.width - RoomPlan.size.width * scale) / 2,
                 y: (content.height - RoomPlan.size.height * scale) / 2
             )
 
@@ -100,6 +97,8 @@ struct RoomView: View {
                          contentSize: content, palette: palette)
                         .frame(width: content.width, height: content.height)
                 }
+                // Open on the middle of the office, not its top-left tile.
+                .defaultScrollAnchor(.center)
                 .background(palette.floorB)
                 .overlay(alignment: .bottomTrailing) {
                     HStack(spacing: 8) {
@@ -124,14 +123,23 @@ struct RoomView: View {
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
-                // Zoomed in, the camera follows your avatar — walk to the
-                // far side of the office and the office comes with you.
+                // The camera follows your avatar — walk to the far side
+                // of the office and the office comes with you.
                 .onChange(of: youFeet) {
                     followAvatar(proxy)
                     updatePlace()
                 }
                 .onChange(of: zoom) {
                     followAvatar(proxy)
+                }
+                // Selecting an agent (sidebar click included) pans the
+                // plan to its desk, slightly left of center so the
+                // floating card never sits on top of it.
+                .onChange(of: selection) {
+                    if let selection {
+                        proxy.scrollTo("agent-\(selection)",
+                                       anchor: UnitPoint(x: 0.38, y: 0.5))
+                    }
                 }
             }
         }
@@ -155,10 +163,10 @@ struct RoomView: View {
         }
     }
 
-    /// Keeps your avatar centered while zoomed. At ×1 the whole room fits
-    /// the window and there is nothing to follow.
+    /// Keeps your avatar centered. The plan is bigger than the window by
+    /// default, so this is simply how the room is looked at; when the
+    /// user zooms all the way out, scrollTo quietly has nothing to do.
     private func followAvatar(_ proxy: ScrollViewProxy) {
-        guard zoom > 1 else { return }
         proxy.scrollTo(Self.youAnchorID, anchor: .center)
     }
 
@@ -300,7 +308,21 @@ struct RoomView: View {
                 .animation(.linear(duration: 0.1), value: youFeet)
                 .allowsHitTesting(false)
 
+            // Each desk wears its provider's badge — the little logo of
+            // the tool running there (Claude today; see docs/providers.md
+            // for tomorrow's mixed office).
+            ForEach(office.workstations.indices, id: \.self) { index in
+                let pod = RoomPlan.pod(index: index, of: stationCount)
+                Image(office.workstations[index].provider.logoAssetName)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 6.5 * scale, height: 6.5 * scale)
+                    .position(map(CGPoint(x: pod.desk.maxX - 6, y: pod.desk.minY + 6)))
+                    .allowsHitTesting(false)
+            }
+
             // The agents' 2D halves: pill, tap target, selection ring.
+            // The id is the pan-to-selection scroll target.
             ForEach(office.sessions) { session in
                 AgentOverlay(
                     office: office,
@@ -312,6 +334,7 @@ struct RoomView: View {
                     onTap: { selection = session.id }
                 )
                 .transition(.opacity)
+                .id("agent-\(session.id)")
             }
         }
     }
@@ -621,7 +644,7 @@ private struct ZoomControls: View {
                 zoom = max(range.lowerBound, zoom / step)
             }
             Button {
-                zoom = range.lowerBound
+                zoom = 1 // back to the big plan, not to fit-the-window
             } label: {
                 Text(verbatim: "\(Int((zoom * 100).rounded()))%")
                     .font(.caption.monospacedDigit())

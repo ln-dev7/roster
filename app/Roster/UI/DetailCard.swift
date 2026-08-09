@@ -78,6 +78,17 @@ struct DetailCard: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            if let provider = workstation?.provider {
+                HStack(spacing: 5) {
+                    Image(provider.logoAssetName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 11, height: 11)
+                    Text(verbatim: provider.displayName)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
             if let path = workstation?.path {
                 Text(verbatim: path)
                     .font(.caption2)
