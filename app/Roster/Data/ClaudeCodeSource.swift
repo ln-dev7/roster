@@ -21,17 +21,7 @@ import SwiftUI
 @Observable
 final class ClaudeCodeSource {
 
-    enum ConnectionState: Equatable {
-        /// Not looked yet (first millisecond of app life).
-        case checking
-        /// Hook not installed — the room runs on demo data.
-        case notConnected
-        /// Hook installed, spool being tailed.
-        case connected
-        /// Install failed; the message is shown to the user.
-        case failed(String)
-    }
-
+    /// See AgentProvider.swift — the states are shared by every provider.
     private(set) var state: ConnectionState = .checking
     /// Spool lines accepted so far — visible in logs, handy when debugging.
     private(set) var eventsProcessed = 0
