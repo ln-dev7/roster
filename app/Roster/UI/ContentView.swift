@@ -87,7 +87,7 @@ private struct ConnectBanner: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Text("Demo data. Connect Roster to Claude Code — adds a small hook to ~/.claude/settings.json (a backup is made first).")
+            Text("Sessions appear automatically (read-only). Connect to unlock the waiting, finished and error states — adds a small hook to ~/.claude/settings.json, after backing it up.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             Spacer()

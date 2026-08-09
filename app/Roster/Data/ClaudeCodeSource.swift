@@ -69,27 +69,32 @@ final class ClaudeCodeSource {
         rescanTask?.cancel()
     }
 
-    /// Called once at launch: adopt the existing install if there is one.
+    /// Called once at launch.
+    ///
+    /// The feeds start in EVERY case: the transcript scan is read-only and
+    /// harmless, so real sessions appear in the room automatically, hook
+    /// or not. What consent gates is only the *write* — installing the
+    /// hook into ~/.claude/settings.json, which unlocks the rich states
+    /// (waiting for input, finished, failed) and the walk.
     func refresh() {
         if HookInstaller.isInstalled() {
-            log.info("hook already installed; starting watcher")
+            log.info("hook already installed")
             state = .connected
-            startFeeds()
         } else {
-            log.info("hook not installed; waiting for consent")
+            log.info("hook not installed; presence-only until consent")
             state = .notConnected
         }
+        startFeeds()
     }
 
     /// The consent button. Installs (or upgrades) the hook set — with a
-    /// backup — then starts listening. Errors land in `state` for the
-    /// banner to display.
+    /// backup. The feeds are already running; from here the spool starts
+    /// filling. Errors land in `state` for the banner to display.
     func connect() {
         do {
             try HookInstaller.install()
             log.info("hook installed")
             state = .connected
-            startFeeds()
         } catch {
             log.error("hook install failed: \(error.localizedDescription)")
             state = .failed(error.localizedDescription)
