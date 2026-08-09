@@ -24,26 +24,31 @@ struct ContentView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            switch source.state {
-            case .notConnected:
-                ConnectBanner(source: source)
-            case .failed(let message):
-                ErrorBanner(message: message, source: source)
-            case .checking, .connected:
-                EmptyView()
-            }
+        HStack(spacing: 0) {
+            SidebarView(office: office, source: source)
+            Divider()
 
-            RoomView(office: office)
+            VStack(spacing: 0) {
+                switch source.state {
+                case .notConnected:
+                    ConnectBanner(source: source)
+                case .failed(let message):
+                    ErrorBanner(message: message, source: source)
+                case .checking, .connected:
+                    EmptyView()
+                }
 
-            if isPanelVisible {
-                Divider()
-                SimulationPanel(office: office)
+                RoomView(office: office)
+
+                if isPanelVisible {
+                    Divider()
+                    SimulationPanel(office: office)
+                }
             }
         }
         // Below this the room becomes hard to read; the window is free to
         // grow as much as it likes.
-        .frame(minWidth: 720, minHeight: 500)
+        .frame(minWidth: 960, minHeight: 500)
         .task {
             // Wire the arrival notification: core fires the callback, the
             // app layer decides what it means. [weak office] breaks the

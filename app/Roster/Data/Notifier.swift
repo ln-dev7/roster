@@ -20,7 +20,7 @@ enum Notifier {
     static func agentArrived(project: String) {
         let content = UNMutableNotificationContent()
         content.title = project
-        content.body = "Finished — waiting at your desk."
+        content.body = String(localized: "Finished — waiting at your desk.")
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,

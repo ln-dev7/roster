@@ -1,0 +1,67 @@
+/* French localization. English is the development language and the
+   fallback — the keys ARE the English strings, so only this file exists.
+   XcodeGen turns .lproj folders under Resources into localized groups
+   on its own (see project.yml). */
+
+/* ── Sidebar ── */
+"Needs you" = "Besoin de toi";
+"At your desk" = "À ton bureau";
+"Working" = "Au travail";
+"Empty desks" = "Postes vides";
+"No sessions yet — open a Claude Code session." = "Aucune session — lance une session Claude Code.";
+"Settings" = "Réglages";
+"Connected to Claude Code" = "Connecté à Claude Code";
+"Presence only — hooks not installed" = "Présence seule — hooks non installés";
+
+/* ── Status ── */
+"Needs your input" = "Attend ta réponse";
+"Finished — waiting for your review" = "Terminé — attend ta review";
+"Last turn failed" = "Le dernier tour a échoué";
+
+/* ── Banner ── */
+"Sessions appear automatically (read-only). Connect to unlock the waiting, finished and error states — adds a small hook to ~/.claude/settings.json, after backing it up." = "Les sessions apparaissent automatiquement (lecture seule). Connecte pour débloquer les états attente, terminé et erreur — ajoute un petit hook à ~/.claude/settings.json, après sauvegarde.";
+"Connect" = "Connecter";
+"Retry" = "Réessayer";
+
+/* ── Agent popover ── */
+"No summary yet — it appears after the agent's first finished turn." = "Pas encore de résumé — il apparaît après le premier tour terminé de l'agent.";
+"Open in VS Code" = "Ouvrir dans VS Code";
+"Open Terminal" = "Ouvrir le Terminal";
+"Reviewed" = "Review faite";
+
+/* ── Simulation panel ── */
+"Simulate" = "Simulation";
+"Seed demo room" = "Peupler la pièce démo";
+"Reset demo" = "Réinitialiser la démo";
+"+ %@" = "+ %@";
+"Needs input" = "Question";
+"Finished" = "Terminé";
+"Answered" = "Répondu";
+"Error" = "Erreur";
+"End" = "Fin";
+
+/* ── Settings ── */
+"General" = "Général";
+"Claude Code" = "Claude Code";
+"Keep window on top" = "Garder la fenêtre au premier plan";
+"Notify when an agent reaches your desk" = "Notifier quand un agent arrive à ton bureau";
+"Walk threshold" = "Seuil de traversée";
+"0 s" = "0 s";
+"120 s" = "120 s";
+"A finished turn only earns the walk to your desk when the agent worked at least %lld seconds. Below that, it stays seated — quick replies shouldn't send anyone pacing." = "Un tour terminé ne déclenche la traversée que si l'agent a travaillé au moins %lld secondes. En dessous, il reste assis — les réponses rapides ne doivent faire marcher personne.";
+"Config folders" = "Dossiers de configuration";
+"Folders named ~/.claude* are found automatically. If your shell aliases point CLAUDE_CONFIG_DIR somewhere else, add that folder here." = "Les dossiers nommés ~/.claude* sont détectés automatiquement. Si tes alias shell pointent CLAUDE_CONFIG_DIR ailleurs, ajoute ce dossier ici.";
+"Add config folder…" = "Ajouter un dossier de configuration…";
+"Install hooks in all folders" = "Installer les hooks dans tous les dossiers";
+"Adds Roster's event hooks to each folder's settings.json — a timestamped backup is written first. This is what unlocks the waiting, finished and error states." = "Ajoute les hooks d'événements de Roster au settings.json de chaque dossier — une sauvegarde horodatée est écrite d'abord. C'est ce qui débloque les états attente, terminé et erreur.";
+"Hooks installed" = "Hooks installés";
+"Remove" = "Retirer";
+
+/* ── Menus ── */
+"Keep on Top" = "Toujours au premier plan";
+"Show Simulation Panel" = "Afficher le panneau de simulation";
+"Check for Updates…" = "Rechercher des mises à jour…";
+"Debug" = "Debug";
+
+/* ── Notification ── */
+"Finished — waiting at your desk." = "Terminé — il t'attend à ton bureau.";

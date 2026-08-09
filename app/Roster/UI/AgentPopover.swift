@@ -14,12 +14,7 @@ struct AgentPopover: View {
     }
 
     private var statusLabel: String {
-        switch session.status {
-        case .working: return "Working"
-        case .waitingForInput: return "Needs your input"
-        case .finished: return "Finished — waiting for your review"
-        case .failed: return "Last turn failed"
-        }
+        session.status.uiLabel
     }
 
     var body: some View {
