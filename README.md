@@ -1,50 +1,78 @@
 <p align="center">
-  <!-- The demo GIF lands here before anything else. It IS the readme. -->
+  <!-- The demo GIF lands here before anything else. It IS the readme.
+       Record it with Debug → Show Simulation Panel (⇧⌘D). -->
   <em>(demo GIF coming with the first release)</em>
 </p>
 
-# Roster
+<h1 align="center">Roster</h1>
 
-**Your coding agents, in a room. They come to your desk when they're done.**
+<p align="center">
+  <strong>Your coding agents, in a room. They come to your desk when they're done.</strong>
+</p>
 
-Roster is a macOS app that shows your Claude Code sessions as colleagues in a
-small office, drawn like an architect's blueprint. They work at their
-stations; when one needs you, it stands up; when one finishes, it gets up,
-crosses the room, and waits at your desk.
+<p align="center">
+  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-5e6ad2"></a>
+  <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-33445f">
+  <a href="https://github.com/ln-dev7/roster/releases/latest"><img alt="Download" src="https://img.shields.io/badge/download-.dmg-5e6ad2"></a>
+</p>
 
-Not a dashboard. No lists, no columns, no diffs — other tools do that well.
-Roster is the glanceable, ambient version: the state of the room *is* the
-state of your agents.
+Roster is a macOS app that shows your Claude Code sessions as colleagues
+in a small office, drawn like an architect's blueprint. They work at
+their stations. They stand up when they need you. And when one finishes
+a real piece of work, it gets up, crosses the room, and waits at your
+desk.
 
-## Status
+Not a dashboard. No lists, no columns, no diffs — other tools do that
+well. Roster is the ambient version: you don't read it, you glance at
+it. The state of the room *is* the state of your agents.
 
-Early prototype — increment 1 of 5: the walk, with simulated data.
-If the walk isn't delightful, nothing else gets built.
+## How it works
 
-## Build
+Three small pieces, all local. With your consent, Roster adds one hook
+line to each of your Claude Code config folders (after backing them up);
+every session event is appended to a local spool file that Roster tails —
+it even catches up on what happened while it was closed. A read-only
+transcript scan makes sessions appear automatically before any of that,
+and multiple accounts (`CLAUDE_CONFIG_DIR` aliases) are supported out of
+the box.
 
-Requires Xcode and [XcodeGen](https://github.com/yonaskolb/XcodeGen)
-(`brew install xcodegen`).
+**Privacy:** Roster never reads your code — only session events. No
+server, no account, no telemetry. The update check (Sparkle) stays off
+until you opt in, and doesn't exist at all in this version.
+
+## Install
+
+Download the latest
+[`Roster.dmg`](https://github.com/ln-dev7/roster/releases/latest/download/Roster.dmg)
+— signed with a Developer ID and notarized by Apple. Requires macOS 14+.
+
+Or build from source:
 
 ```sh
-cd app
+brew install xcodegen
+git clone https://github.com/ln-dev7/roster.git
+cd roster/app
 xcodegen
-open Roster.xcodeproj   # then ⌘R
+open Roster.xcodeproj   # ⌘R
 ```
 
-The `.xcodeproj` is generated and not versioned; `app/project.yml` is the
-source of truth.
+## Contributing
+
+MIT, and gladly. Read [CONTRIBUTING.md](CONTRIBUTING.md) — the scope
+test for any change is *"does it improve the GIF?"* — and pick a
+[good first issue](https://github.com/ln-dev7/roster/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22).
 
 ## Repository layout
 
 ```
 app/      the macOS app (Swift, SwiftUI, XcodeGen)
-site/     the product site — later (roster.lndev.me)
-shared/   assets shared between app and site
-scripts/  build, release and tooling scripts — later
-docs/     decisions and notes
+site/     roster.lndev.me (Next.js, /en and /fr)
+shared/   assets shared between app, site and dmg
+scripts/  build, release, icon and dmg tooling
+docs/     decisions log, testing pass, issue drafts
 ```
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — © 2026 [LN](https://lndev.me). Also by LN:
+[DockKeep](https://dockkeep.lndev.me).
