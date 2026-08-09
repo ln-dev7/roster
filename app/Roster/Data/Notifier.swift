@@ -21,6 +21,10 @@ enum Notifier {
         let content = UNMutableNotificationContent()
         content.title = project
         content.body = String(localized: "Finished — waiting at your desk.")
+        // The default notification sound. Without this line the banner is
+        // silent — sound is opt-in per notification, not per app. The user
+        // keeps the last word in System Settings → Notifications → Roster.
+        content.sound = .default
 
         let request = UNNotificationRequest(
             identifier: UUID().uuidString,
