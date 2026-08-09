@@ -2,7 +2,7 @@ import { Download01Icon, GithubIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { getTranslations, setRequestLocale } from "next-intl/server"
 
-import { FadeIn, Float, Lift } from "@/components/site/animate"
+import { FadeIn, Lift } from "@/components/site/animate"
 import { HeroRoom } from "@/components/site/hero-room"
 import { SiteFooter } from "@/components/site/site-footer"
 import { SiteHeader } from "@/components/site/site-header"
@@ -17,19 +17,6 @@ const STATUS = {
   finished: "#af52de",
   failed: "#ff3b30",
   you: "#8a8f98",
-}
-
-/** One floating name pill, exactly like the ones above the characters. */
-function StatusPill({ name, color }: { name: string; color: string }) {
-  return (
-    <span className="flex items-center gap-2 rounded-full bg-[#181410]/90 py-1.5 pr-3.5 pl-2.5 text-xs font-medium text-white shadow-lg backdrop-blur">
-      <span
-        className="size-2 shrink-0 rounded-full"
-        style={{ background: color }}
-      />
-      {name}
-    </span>
-  )
 }
 
 export default async function HomePage({
@@ -118,8 +105,7 @@ export default async function HomePage({
             </p>
           </FadeIn>
 
-          {/* The room, live, in its own little macOS window — with the
-              name pills floating around it like in the app. */}
+          {/* The room, live, in its own little macOS window. */}
           <FadeIn delay={0.15}>
             <figure className="relative mt-16">
               <div className="overflow-hidden rounded-3xl border bg-card shadow-2xl shadow-foreground/10">
@@ -133,31 +119,6 @@ export default async function HomePage({
                 </div>
                 <HeroRoom />
               </div>
-
-              <Float
-                delay={0.2}
-                className="absolute -left-5 top-[22%] hidden md:block"
-              >
-                <StatusPill name="circle" color={STATUS.working} />
-              </Float>
-              <Float
-                delay={0.9}
-                className="absolute -right-6 top-[38%] hidden md:block"
-              >
-                <StatusPill name="blog" color={STATUS.waiting} />
-              </Float>
-              <Float
-                delay={1.5}
-                className="absolute -top-4 right-[14%] hidden md:block"
-              >
-                <StatusPill name="dockkeep" color={STATUS.finished} />
-              </Float>
-              <Float
-                delay={2.1}
-                className="absolute -bottom-4 left-[12%] hidden md:block"
-              >
-                <StatusPill name={t("hero.you")} color={STATUS.you} />
-              </Float>
 
               <figcaption className="mt-4 text-center font-mono text-xs text-muted-foreground/70">
                 {t("hero.caption")}
@@ -347,13 +308,6 @@ export default async function HomePage({
         <section className="mx-auto w-full max-w-6xl px-6 pb-24">
           <FadeIn>
             <div className="relative overflow-hidden rounded-[2.5rem] bg-primary px-8 py-20 text-center text-primary-foreground">
-              <Float delay={0.3} className="absolute top-10 left-[12%] hidden md:block">
-                <StatusPill name="circle" color={STATUS.working} />
-              </Float>
-              <Float delay={1.1} className="absolute right-[10%] bottom-12 hidden md:block">
-                <StatusPill name="dockkeep" color={STATUS.finished} />
-              </Float>
-
               <h2 className="text-3xl font-bold tracking-tight text-balance sm:text-4xl">
                 {t("cta.title")}
               </h2>
