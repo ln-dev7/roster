@@ -8,9 +8,10 @@ import SwiftUI
 @main
 struct RosterApp: App {
 
-    /// Same storage key as ContentView: the Debug menu drives what the
-    /// window shows. `@AppStorage` persists it across launches.
+    /// Same storage keys as ContentView: the menus drive what the window
+    /// does. `@AppStorage` persists both across launches.
     @AppStorage("showSimulationPanel") private var showSimulationPanel = false
+    @AppStorage("keepOnTop") private var keepOnTop = false
 
     var body: some Scene {
         WindowGroup {
@@ -25,6 +26,12 @@ struct RosterApp: App {
         .commands {
             // One window is the whole app; "New Window" would only confuse.
             CommandGroup(replacing: .newItem) {}
+
+            // Floating window level, in the View menu where it belongs.
+            CommandGroup(after: .windowSize) {
+                Toggle("Keep on Top", isOn: $keepOnTop)
+                    .keyboardShortcut("t", modifiers: [.command, .option])
+            }
 
             // The simulation panel: our permanent GIF-recording studio,
             // hidden by default once real sessions feed the room.

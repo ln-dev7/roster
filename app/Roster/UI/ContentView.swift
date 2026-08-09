@@ -14,6 +14,10 @@ struct ContentView: View {
     /// Toggled from the Debug menu (same key there).
     @AppStorage("showSimulationPanel") private var showSimulationPanel = false
 
+    /// Toggled from the View menu (same key there): floating window level,
+    /// so the room stays visible in a corner while you work.
+    @AppStorage("keepOnTop") private var keepOnTop = false
+
     init() {
         let office = Office()
         _office = State(initialValue: office)
@@ -48,11 +52,29 @@ struct ContentView: View {
         // grow as much as it likes.
         .frame(minWidth: 720, minHeight: 500)
         .task {
+            // Wire the arrival notification: core fires the callback, the
+            // app layer decides what it means. [weak office] breaks the
+            // cycle (the closure is stored on the office itself).
+            office.onAgentArrived = { [weak office] session in
+                guard let office,
+                      office.workstations.indices.contains(session.stationIndex)
+                else { return }
+                Notifier.agentArrived(
+                    project: office.workstations[session.stationIndex].name
+                )
+            }
+            Notifier.requestPermissionIfNeeded()
+
+            WindowLevel.apply(keepOnTop: keepOnTop)
+
             source.refresh()
             // No hook yet → show something alive rather than an empty room.
             if source.state != .connected && office.workstations.isEmpty {
                 office.seedDemo()
             }
+        }
+        .onChange(of: keepOnTop) {
+            WindowLevel.apply(keepOnTop: keepOnTop)
         }
     }
 }

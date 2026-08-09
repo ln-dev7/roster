@@ -36,7 +36,8 @@ enum AgentPhase: Equatable {
 
 /// One desk in the room = one project (a repository, in real life).
 /// Stations persist even when empty — an empty desk is a state, not a gap.
-struct Workstation: Identifiable, Equatable {
+/// Codable because known desks survive restarts (WorkstationStore).
+struct Workstation: Identifiable, Equatable, Codable {
     /// Stable identity: the repository path for real stations, a "demo-…"
     /// string for simulated ones.
     let id: String
@@ -99,8 +100,13 @@ final class Office {
     @ObservationIgnored var externalToID: [String: Int] = [:]
     /// When each session last received a prompt — used by the walk rule.
     @ObservationIgnored var lastPromptAt: [Int: Date] = [:]
-    /// Last assistant message per session (the "summary" of increment 4).
-    @ObservationIgnored var lastSummary: [Int: String] = [:]
+    /// Last assistant message per session — shown by the agent popover, so
+    /// it participates in observation (unlike the bookkeeping above).
+    var lastSummary: [Int: String] = [:]
+
+    /// Fired when an agent reaches your desk after the walk. The app layer
+    /// plugs the macOS notification in here; the core stays UI-free.
+    @ObservationIgnored var onAgentArrived: ((AgentSession) -> Void)?
     /// A turn shorter than this doesn't earn a walk: quick chat replies
     /// would send agents pacing constantly. Tunable; 45 s felt right.
     @ObservationIgnored var finishThreshold: TimeInterval = 45
@@ -156,6 +162,17 @@ final class Office {
         let name = (path as NSString).lastPathComponent
         workstations.append(Workstation(id: path, name: name, path: path))
         return workstations.count - 1
+    }
+
+    /// Re-adds a desk remembered from a previous launch. Returns false on
+    /// duplicates or a full room. The desk comes back empty — an agent
+    /// only appears when a session actually runs there.
+    @discardableResult
+    func restoreWorkstation(_ workstation: Workstation) -> Bool {
+        guard !workstations.contains(where: { $0.id == workstation.id }),
+              workstations.count < Self.maxStations else { return false }
+        workstations.append(workstation)
+        return true
     }
 
     /// Three fake desks with one working agent each — the demo room, used
@@ -247,7 +264,10 @@ final class Office {
             guard setPhase(.walking, of: id, ifGeneration: generation) else { return }
             await sleeper(Choreo.walk)
             guard setPhase(.atDesk, of: id, ifGeneration: generation) else { return }
-            // Stays at the desk. Your move.
+            // Arrived. Stays at the desk — and the app layer may notify.
+            if let session = session(id) {
+                onAgentArrived?(session)
+            }
         }
     }
 

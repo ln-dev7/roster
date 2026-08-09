@@ -37,6 +37,7 @@ struct RoomView: View {
                 }
                 ForEach(office.sessions) { session in
                     AgentDotView(
+                        office: office,
                         session: session,
                         station: RoomPlan.station(index: session.stationIndex, of: stationCount),
                         seatCount: office.seatCount(onStation: session.stationIndex),
@@ -286,11 +287,15 @@ private struct LineShape: Shape {
 
 private struct AgentDotView: View {
 
+    let office: Office
     let session: AgentSession
     let station: RoomPlan.Station
     /// Occupants of this agent's station, for seat spreading.
     let seatCount: Int
     let theme: BlueprintTheme
+
+    /// Clicking a dot opens its popover (summary + actions).
+    @State private var showActions = false
 
     private var position: CGPoint {
         switch session.phase {
@@ -334,6 +339,13 @@ private struct AgentDotView: View {
             }
 
             dot
+        }
+        // A comfortable click target around the 14 pt dot.
+        .frame(width: 34, height: 34)
+        .contentShape(Circle())
+        .onTapGesture { showActions = true }
+        .popover(isPresented: $showActions, arrowEdge: .bottom) {
+            AgentPopover(office: office, session: session)
         }
         .position(position)
         // Movement animation, keyed on the phase…

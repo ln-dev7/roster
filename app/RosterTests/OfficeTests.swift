@@ -126,6 +126,39 @@ final class OfficeTests: XCTestCase {
         XCTAssertEqual(Set(slots).count, 2, "queued agents must not overlap")
     }
 
+    // MARK: Arrival callback & restored desks
+
+    func testArrivalCallbackFiresExactlyOnceAtTheDesk() async {
+        let office = makeInstantOffice()
+        var arrivals: [Int] = []
+        office.onAgentArrived = { arrivals.append($0.id) }
+        let id = office.sessions[0].id
+
+        await office.finish(id)?.value
+        XCTAssertEqual(arrivals, [id])
+
+        // The return leg must not fire it again.
+        await office.resumeWorking(id)?.value
+        XCTAssertEqual(arrivals, [id])
+    }
+
+    func testRestoreWorkstationDedupsAndRespectsTheCap() {
+        let office = Office(sleeper: { _ in })
+        let desk = Workstation(id: "/repo/circle", name: "circle", path: "/repo/circle")
+
+        XCTAssertTrue(office.restoreWorkstation(desk))
+        XCTAssertFalse(office.restoreWorkstation(desk), "duplicates refused")
+        XCTAssertEqual(office.workstations.count, 1)
+        XCTAssertTrue(office.sessions.isEmpty, "restored desks come back empty")
+
+        for i in 0..<10 {
+            office.restoreWorkstation(
+                Workstation(id: "/repo/p\(i)", name: "p\(i)", path: "/repo/p\(i)")
+            )
+        }
+        XCTAssertEqual(office.workstations.count, Office.maxStations)
+    }
+
     // MARK: Failure & interruption
 
     func testFailurePullsTheAgentBackToItsStation() async {
