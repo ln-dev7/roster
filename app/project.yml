@@ -93,8 +93,8 @@ targets:
       base:
         PRODUCT_NAME: Roster
         PRODUCT_BUNDLE_IDENTIFIER: com.lndev.roster
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: "0.2.0"
+        CURRENT_PROJECT_VERSION: 2
 
         # Automatic signing with the development certificate for local builds.
         # Release signing (Developer ID + notarization) will be handled by
