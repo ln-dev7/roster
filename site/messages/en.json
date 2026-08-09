@@ -1,0 +1,110 @@
+{
+  "meta": {
+    "title": "Roster — Your coding agents, in a room",
+    "description": "A macOS app that shows your Claude Code sessions as colleagues in a blueprint office. They work at their desks — and walk to yours when they're done. Free, open source, local-only."
+  },
+  "nav": {
+    "features": "Features",
+    "how": "How it works",
+    "faq": "FAQ",
+    "download": "Download",
+    "github": "GitHub"
+  },
+  "hero": {
+    "badge": "Free & open source · MIT",
+    "title": "Your coding agents, in a room.",
+    "subtitle": "Roster turns your Claude Code sessions into colleagues in a small blueprint office. They work at their stations. They stand up when they need you. And when they finish, they cross the room to your desk.",
+    "download": "Download for macOS",
+    "github": "View on GitHub",
+    "note": "macOS 14+ · Signed & notarized · No account, no telemetry",
+    "caption": "Live from the room — dockkeep just finished and is waiting at your desk."
+  },
+  "positioning": {
+    "title": "Not another dashboard.",
+    "body": "Lists, diffs, kanban boards — other tools already do that well. Roster is the ambient version: a quiet room in the corner of your screen. You don't read it, you glance at it. The state of the room is the state of your agents."
+  },
+  "features": {
+    "eyebrow": "Features",
+    "title": "The room speaks for itself",
+    "f1": {
+      "title": "The walk",
+      "body": "Real work earns a crossing: when an agent finishes a long task, it stands up, walks across the plan and waits at your desk until you've had a look. Discovering a finished agent twenty minutes late is over."
+    },
+    "f2": {
+      "title": "Five states, zero reading",
+      "body": "Seated and working. Standing when it needs your input. Walking when it's done. At your desk for review. An empty seat when idle — plus a red cross when a turn fails. One glance covers them all."
+    },
+    "f3": {
+      "title": "Calm by design",
+      "body": "When everyone is working, almost nothing moves — a monitor breathing, that's it. Native SwiftUI, no game-engine loop: the room costs about zero CPU while it sits with you all day."
+    },
+    "f4": {
+      "title": "Desks are projects",
+      "body": "Each desk is one of your repositories, created the moment an agent first shows up there. Two agents can share a desk, and an empty desk is information too."
+    }
+  },
+  "how": {
+    "eyebrow": "How it works",
+    "title": "Three small pieces, all local",
+    "s1": {
+      "title": "A hook",
+      "body": "With your consent, Roster adds one line to ~/.claude/settings.json — after backing it up. From then on, every session event is appended to a local spool file."
+    },
+    "s2": {
+      "title": "A spool file",
+      "body": "Events pile up even while Roster is closed. On launch the room replays them and catches up — no server, no socket, no polling."
+    },
+    "s3": {
+      "title": "A room",
+      "body": "Events map one-to-one to the choreography: needs-input stands the agent up, a finished long turn triggers the walk, a failure pulls it back to its station."
+    },
+    "privacy": "Everything stays on your Mac. Roster never reads your code — only session events. No network, no account, no telemetry."
+  },
+  "open": {
+    "eyebrow": "Open source",
+    "title": "MIT, from day one",
+    "body": "Roster is free and open source. The state machine is unit-tested, the fragile parts are isolated behind a thin layer, and the repo keeps a written log of every design decision. Good first issues are waiting for you.",
+    "star": "Star on GitHub",
+    "issues": "Browse good first issues"
+  },
+  "faq": {
+    "title": "Questions",
+    "q1": {
+      "q": "Does it work with agents other than Claude Code?",
+      "a": "Not yet. V0 is deliberately Claude Code + VS Code + one Mac — depth over breadth. The issue tracker is open if you want to change that."
+    },
+    "q2": {
+      "q": "Does Roster read my code?",
+      "a": "No. It only sees session events: state changes, the working directory, and the last assistant message for the summary. Nothing ever leaves your machine."
+    },
+    "q3": {
+      "q": "Why isn't it on the Mac App Store?",
+      "a": "Roster needs to read ~/.claude and install its hook, which the App Store sandbox forbids. It ships as a signed, notarized DMG on GitHub Releases instead."
+    },
+    "q4": {
+      "q": "What if Claude Code changes its file formats?",
+      "a": "The hooks Roster relies on are a documented interface, so the core is safe. The undocumented parts — the transcript bootstrap — are isolated and fail silently; worst case, the room misses a warm start."
+    }
+  },
+  "cta": {
+    "title": "Put your agents in a room.",
+    "body": "One DMG, one hook, and your sessions become colleagues.",
+    "download": "Download for macOS",
+    "github": "Star on GitHub"
+  },
+  "footer": {
+    "tagline": "Your coding agents, in a room. They come to your desk when they're done.",
+    "product": "Product",
+    "download": "Download",
+    "releases": "Releases",
+    "roadmap": "Roadmap",
+    "project": "Project",
+    "github": "GitHub",
+    "license": "License (MIT)",
+    "issues": "Good first issues",
+    "author": "Author",
+    "site": "lndev.me",
+    "dockkeep": "DockKeep — also by LN",
+    "copyright": "© {year} Ange Leonel Ngoya Jipgang · MIT"
+  }
+}

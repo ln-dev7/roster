@@ -1,0 +1,110 @@
+{
+  "meta": {
+    "title": "Roster — Tes agents de code, dans une pièce",
+    "description": "Une app macOS qui affiche tes sessions Claude Code comme des collègues dans un bureau en plan d'architecte. Ils travaillent à leur poste — et viennent au tien quand ils ont fini. Gratuit, open source, 100 % local."
+  },
+  "nav": {
+    "features": "Fonctionnalités",
+    "how": "Fonctionnement",
+    "faq": "FAQ",
+    "download": "Télécharger",
+    "github": "GitHub"
+  },
+  "hero": {
+    "badge": "Gratuit & open source · MIT",
+    "title": "Tes agents de code, dans une pièce.",
+    "subtitle": "Roster transforme tes sessions Claude Code en collègues dans un petit bureau dessiné comme un plan d'architecte. Ils travaillent à leur poste. Ils se lèvent quand ils ont besoin de toi. Et quand ils ont fini, ils traversent la pièce jusqu'à ton bureau.",
+    "download": "Télécharger pour macOS",
+    "github": "Voir sur GitHub",
+    "note": "macOS 14+ · Signé & notarisé · Sans compte, sans télémétrie",
+    "caption": "En direct de la pièce — dockkeep vient de finir et t'attend à ton bureau."
+  },
+  "positioning": {
+    "title": "Pas un dashboard de plus.",
+    "body": "Les listes, les diffs, les kanbans — d'autres outils le font déjà très bien. Roster, c'est la version ambiante : une petite pièce calme dans un coin de ton écran. Tu ne la lis pas, tu la regardes du coin de l'œil. L'état de la pièce, c'est l'état de tes agents."
+  },
+  "features": {
+    "eyebrow": "Fonctionnalités",
+    "title": "La pièce parle d'elle-même",
+    "f1": {
+      "title": "La traversée",
+      "body": "Le vrai travail se mérite une traversée : quand un agent termine une longue tâche, il se lève, traverse le plan et attend à ton bureau que tu aies jeté un œil. Découvrir un agent fini vingt minutes trop tard, c'est terminé."
+    },
+    "f2": {
+      "title": "Cinq états, zéro lecture",
+      "body": "Assis, il travaille. Debout, il attend ta réponse. En marche, il a fini. À ton bureau, il attend ta review. Chaise vide, la session est inactive — plus une croix rouge quand un tour échoue. Un coup d'œil suffit."
+    },
+    "f3": {
+      "title": "Calme par principe",
+      "body": "Quand tout le monde travaille, presque rien ne bouge — un écran qui respire, c'est tout. SwiftUI natif, pas de boucle de moteur de jeu : la pièce coûte environ zéro CPU en restant ouverte toute la journée."
+    },
+    "f4": {
+      "title": "Les postes sont des projets",
+      "body": "Chaque poste est un de tes dépôts, créé dès qu'un agent y apparaît pour la première fois. Deux agents peuvent partager un poste, et un poste vide, c'est aussi de l'information."
+    }
+  },
+  "how": {
+    "eyebrow": "Fonctionnement",
+    "title": "Trois petites pièces, tout en local",
+    "s1": {
+      "title": "Un hook",
+      "body": "Avec ton accord, Roster ajoute une ligne à ~/.claude/settings.json — après l'avoir sauvegardé. Ensuite, chaque événement de session s'ajoute à un fichier spool local."
+    },
+    "s2": {
+      "title": "Un fichier spool",
+      "body": "Les événements s'accumulent même quand Roster est fermé. Au lancement, la pièce les rejoue et se met à jour — pas de serveur, pas de socket, pas de polling."
+    },
+    "s3": {
+      "title": "Une pièce",
+      "body": "Les événements correspondent un à un à la chorégraphie : une question lève l'agent, un long tour terminé déclenche la traversée, une erreur le ramène à son poste."
+    },
+    "privacy": "Tout reste sur ton Mac. Roster ne lit jamais ton code — seulement les événements de session. Pas de réseau, pas de compte, pas de télémétrie."
+  },
+  "open": {
+    "eyebrow": "Open source",
+    "title": "MIT, depuis le premier jour",
+    "body": "Roster est gratuit et open source. La machine à états est testée unitairement, les parties fragiles sont isolées derrière une couche fine, et le dépôt tient un journal écrit de chaque décision de design. Des good first issues t'attendent.",
+    "star": "Star sur GitHub",
+    "issues": "Voir les good first issues"
+  },
+  "faq": {
+    "title": "Questions",
+    "q1": {
+      "q": "Ça marche avec d'autres agents que Claude Code ?",
+      "a": "Pas encore. La V0 est volontairement Claude Code + VS Code + un seul Mac — la profondeur avant la largeur. L'issue tracker est ouvert si tu veux changer ça."
+    },
+    "q2": {
+      "q": "Roster lit-il mon code ?",
+      "a": "Non. Il ne voit que les événements de session : les changements d'état, le dossier de travail, et le dernier message de l'agent pour le résumé. Rien ne quitte jamais ta machine."
+    },
+    "q3": {
+      "q": "Pourquoi pas sur le Mac App Store ?",
+      "a": "Roster doit lire ~/.claude et installer son hook, ce que la sandbox de l'App Store interdit. Il est distribué en DMG signé et notarisé sur GitHub Releases."
+    },
+    "q4": {
+      "q": "Et si Claude Code change ses formats de fichiers ?",
+      "a": "Les hooks utilisés par Roster sont une interface documentée : le cœur est à l'abri. Les parties non documentées — le bootstrap par transcripts — sont isolées et échouent en silence ; au pire, la pièce rate un démarrage à chaud."
+    }
+  },
+  "cta": {
+    "title": "Mets tes agents dans une pièce.",
+    "body": "Un DMG, un hook, et tes sessions deviennent des collègues.",
+    "download": "Télécharger pour macOS",
+    "github": "Star sur GitHub"
+  },
+  "footer": {
+    "tagline": "Tes agents de code, dans une pièce. Ils viennent à ton bureau quand ils ont fini.",
+    "product": "Produit",
+    "download": "Télécharger",
+    "releases": "Releases",
+    "roadmap": "Roadmap",
+    "project": "Projet",
+    "github": "GitHub",
+    "license": "Licence (MIT)",
+    "issues": "Good first issues",
+    "author": "Auteur",
+    "site": "lndev.me",
+    "dockkeep": "DockKeep — aussi par LN",
+    "copyright": "© {year} Ange Leonel Ngoya Jipgang · MIT"
+  }
+}
