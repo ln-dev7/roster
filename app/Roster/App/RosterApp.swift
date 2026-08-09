@@ -15,6 +15,10 @@ struct RosterApp: App {
     @State private var office: Office
     @State private var source: ClaudeCodeSource
 
+    /// Sparkle, wired but silent until the update feed ships (see
+    /// UpdaterModel). One long-lived instance, as Sparkle expects.
+    @StateObject private var updater = UpdaterModel()
+
     /// Same storage keys as ContentView/Settings: the menus drive what the
     /// window does. `@AppStorage` persists them across launches.
     @AppStorage("showSimulationPanel") private var showSimulationPanel = false
@@ -39,6 +43,15 @@ struct RosterApp: App {
         .commands {
             // One window is the whole app; "New Window" would only confuse.
             CommandGroup(replacing: .newItem) {}
+
+            // Right under "About Roster", where every Mac user looks for
+            // it. Disabled until the update feed exists.
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    updater.checkForUpdates()
+                }
+                .disabled(!updater.canCheckForUpdates)
+            }
 
             // Floating window level, in the View menu where it belongs.
             CommandGroup(after: .windowSize) {

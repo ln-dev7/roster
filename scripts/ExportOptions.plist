@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  How the archive is turned into a signed app.
+
+  Xcode does the signing here rather than a hand-rolled `codesign` pass, and
+  that is deliberate: Sparkle ships nested bundles inside its framework
+  (Autoupdate.app, Updater.app, XPC services) and every one of them has to be
+  signed from the inside out, in the right order, with the hardened runtime.
+  `codesign --deep` gets that subtly wrong and Apple advises against it;
+  Xcode's exporter gets it right. (Same reasoning as DockKeep.)
+-->
+<plist version="1.0">
+<dict>
+	<key>method</key>
+	<string>developer-id</string>
+
+	<key>teamID</key>
+	<string>JDWTCZR377</string>
+
+	<key>signingStyle</key>
+	<string>automatic</string>
+
+	<key>destination</key>
+	<string>export</string>
+
+	<!-- Notarization is done separately with notarytool, so the whole .dmg is
+	     stapled in one go rather than just the .app inside it. -->
+</dict>
+</plist>

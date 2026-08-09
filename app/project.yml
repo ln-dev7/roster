@@ -16,11 +16,18 @@ options:
   # language later means adding a .lproj folder under Resources, nothing more.
   developmentLanguage: en
 
-# ── Sparkle ──────────────────────────────────────────────────────────────────
-# Deliberately absent for now. The decision from the brief is "wired but
-# silent": the package, the UpdaterModel and the (disabled) update check all
-# arrive together in increment 5 with the release pipeline, so the app never
-# carries a half-dead update path in the meantime.
+packages:
+  # Sparkle is the standard updater for apps distributed outside the App
+  # Store. Pinned to the 2.9 line — same reasoning as DockKeep: security
+  # fixes included, no surprise API break on a routine resolve.
+  #
+  # Wired but SILENT: Info.plist ships without SUFeedURL, and UpdaterModel
+  # refuses to start the updater while that key is absent. When
+  # roster.lndev.me serves the appcast, adding SUFeedURL + SUPublicEDKey
+  # below turns updates on — no code change needed.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: "2.9.2"
 
 # A shared scheme, so a future scripts/build.sh can drive xcodebuild, exactly
 # like DockKeep's. Run the tests with ⌘U (or xcodebuild test).
@@ -52,9 +59,11 @@ targets:
     platform: macOS
     sources:
       - Roster
+    dependencies:
+      - package: Sparkle
 
-    # Info.plist written out by XcodeGen (not GENERATE_INFOPLIST_FILE), so that
-    # the Sparkle keys of increment 5 can be added here without surprises.
+    # Info.plist written out by XcodeGen (not GENERATE_INFOPLIST_FILE):
+    # Sparkle's keys are ones Xcode's generator doesn't reliably carry.
     info:
       path: SupportingFiles/Info.plist
       properties:
@@ -68,6 +77,17 @@ targets:
         NSPrincipalClass: NSApplication
         NSHighResolutionCapable: true
         CFBundleIconName: AppIcon
+
+        # ── Sparkle (dormant) ────────────────────────────────────────────
+        # SUFeedURL and SUPublicEDKey are deliberately absent: without a
+        # feed the updater never starts (see UpdaterModel). At site launch,
+        # add:
+        #   SUFeedURL: "https://roster.lndev.me/appcast.xml"
+        #   SUPublicEDKey: "<output of Sparkle's generate_keys>"
+        # Off, and stated plainly: no hardware profile ever leaves the Mac.
+        SUEnableSystemProfiling: false
+        # Once a day is plenty, once checking exists at all.
+        SUScheduledCheckInterval: 86400
 
     settings:
       base:
