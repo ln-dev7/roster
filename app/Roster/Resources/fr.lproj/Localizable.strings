@@ -33,7 +33,7 @@
 "Simulate" = "Simulation";
 "Seed demo room" = "Peupler la pièce démo";
 "Reset demo" = "Réinitialiser la démo";
-"+ %@" = "+ %@";
+"+ Agent" = "+ Agent";
 "Needs input" = "Question";
 "Finished" = "Terminé";
 "Answered" = "Répondu";

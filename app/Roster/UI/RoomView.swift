@@ -318,14 +318,14 @@ struct RoomView: View {
 
     /// Feet position in logical coordinates — the one place the phase
     /// turns into geometry, shared by the 3D layer and the 2D overlays.
+    /// One colleague per desk, so everyone takes the chair (slot 0).
     private func feet(of session: AgentSession, stationCount: Int) -> CGPoint {
         let pod = RoomPlan.pod(index: session.stationIndex, of: stationCount)
         switch session.phase {
         case .seated:
-            return pod.seat(slot: session.seatSlot,
-                            of: office.seatCount(onStation: session.stationIndex))
+            return pod.seat(slot: 0, of: 1)
         case .standing, .walkingBack:
-            return pod.stand(slot: session.seatSlot)
+            return pod.stand(slot: 0)
         case .walking, .atDesk:
             return RoomPlan.arrival(deskSlot: session.deskSlot)
         }
@@ -339,14 +339,14 @@ struct RoomView: View {
         }
     }
 
-    /// The look derives from the workstation's ID (the repository path),
-    /// not its display name — two folders both named "api" get different
-    /// outfits, which is half the disambiguation.
+    /// The look derives from the workstation's unique ID (path + serial),
+    /// not its display name — twin desks get different outfits, which is
+    /// half the disambiguation.
     private func look(for session: AgentSession) -> SpriteLook {
         let key = office.workstations.indices.contains(session.stationIndex)
             ? office.workstations[session.stationIndex].id
             : "?"
-        return SpriteLook.derive(from: key, slot: session.seatSlot)
+        return SpriteLook.derive(from: key)
     }
 
     // ── Arrow keys ──────────────────────────────────────────────────────

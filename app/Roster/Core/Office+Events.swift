@@ -63,15 +63,16 @@ extension Office {
         }
     }
 
-    /// Finds the session for a Claude Code `session_id`, creating it (and
-    /// its workstation) when the event carries a `cwd` — this is what lets
-    /// Roster pick up sessions that were already running when the hook was
-    /// installed, or that lived while Roster was closed.
+    /// Finds the session for a Claude Code `session_id`, creating it — and
+    /// its OWN desk, one colleague per desk — when the event carries a
+    /// `cwd`. This is what lets Roster pick up sessions that were already
+    /// running when the hook was installed, or that lived while Roster was
+    /// closed.
     @discardableResult
     private func ensureSession(key: String, cwd: String?) -> Int? {
         if let id = externalToID[key] { return id }
         guard let cwd,
-              let stationIndex = workstationIndex(forPath: cwd),
+              let stationIndex = addWorkstation(forPath: cwd),
               let id = startSession(onStation: stationIndex)
         else { return nil }
         externalToID[key] = id

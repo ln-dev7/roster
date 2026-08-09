@@ -33,13 +33,17 @@ final class OfficeEventTests: XCTestCase {
         XCTAssertEqual(office.sessions[0].status, .working)
     }
 
-    func testTwoSessionsOnTheSameRepoShareTheDesk() {
+    func testTwoSessionsOnTheSameRepoGetTheirOwnDesks() {
         office.apply(.sessionStart(key: "s1", cwd: "/repo/circle"))
         office.apply(.sessionStart(key: "s2", cwd: "/repo/circle"))
 
-        XCTAssertEqual(office.workstations.count, 1)
+        XCTAssertEqual(office.workstations.count, 2,
+                       "one colleague per desk — even from the same folder")
         XCTAssertEqual(office.sessions.count, 2)
-        XCTAssertEqual(office.seatCount(onStation: 0), 2)
+        XCTAssertEqual(office.seatCount(onStation: 0), 1)
+        XCTAssertEqual(office.seatCount(onStation: 1), 1)
+        XCTAssertEqual(office.displayName(forStation: 0), "circle · 1")
+        XCTAssertEqual(office.displayName(forStation: 1), "circle · 2")
     }
 
     func testDuplicateSessionStartIsIgnored() {
@@ -147,12 +151,16 @@ final class OfficeEventTests: XCTestCase {
         XCTAssertTrue(office.sessions.isEmpty)
     }
 
-    func testSharedDeskSurvivesUntilItsLastSessionEnds() {
+    func testEachTwinDeskDiesWithItsOwnSession() {
         office.apply(.sessionStart(key: "s1", cwd: "/repo/circle"))
         office.apply(.sessionStart(key: "s2", cwd: "/repo/circle"))
 
         office.apply(.sessionEnd(key: "s1"))
-        XCTAssertEqual(office.workstations.count, 1, "a colleague still works there")
+        XCTAssertEqual(office.workstations.count, 1,
+                       "only s1's desk leaves; s2 keeps its own")
+        XCTAssertEqual(office.sessions.count, 1)
+        XCTAssertEqual(office.displayName(forStation: 0), "circle",
+                       "the last twin drops its number")
 
         office.apply(.sessionEnd(key: "s2"))
         XCTAssertTrue(office.workstations.isEmpty)

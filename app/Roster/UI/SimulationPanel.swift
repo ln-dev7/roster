@@ -21,19 +21,18 @@ struct SimulationPanel: View {
                         }
                     }
                 } else {
-                    ForEach(office.workstations.indices, id: \.self) { index in
-                        Button("+ \(office.workstations[index].name)") {
-                            // withAnimation drives the dot's insertion
-                            // transition (fade + scale) in RoomView.
-                            // `_ =` because startSession returns the new id
-                            // and withAnimation would otherwise adopt (and
-                            // propagate) that as its own return type.
-                            withAnimation(.easeOut(duration: 0.45)) {
-                                _ = office.startSession(onStation: index)
-                            }
+                    // One colleague per desk: adding an agent always adds
+                    // a fresh desk with it. withAnimation drives the
+                    // insertion transition (fade + scale) in RoomView;
+                    // `_ =` because spawnDemoAgent returns the new id and
+                    // withAnimation would otherwise adopt (and propagate)
+                    // that as its own return type.
+                    Button("+ Agent") {
+                        withAnimation(.easeOut(duration: 0.45)) {
+                            _ = office.spawnDemoAgent()
                         }
-                        .disabled(!office.canAddSession(onStation: index))
                     }
+                    .disabled(office.workstations.count >= Office.maxStations)
                 }
 
                 Spacer()

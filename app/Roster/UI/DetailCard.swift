@@ -48,8 +48,7 @@ struct DetailCard: View {
         ZStack {
             session.status.uiColor.opacity(0.15)
             VoxelPortrait(
-                look: SpriteLook.derive(from: workstation?.id ?? "?",
-                                        slot: session.seatSlot)
+                look: SpriteLook.derive(from: workstation?.id ?? "?")
             )
         }
         .frame(height: 120)

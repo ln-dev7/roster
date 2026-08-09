@@ -29,31 +29,12 @@ final class OfficeTests: XCTestCase {
         }
     }
 
-    func testTwoAgentsShareAStationThenItIsFull() {
+    func testADeskHoldsExactlyOneAgent() {
         let office = makeInstantOffice()
-        let second = office.startSession(onStation: 0)
-        XCTAssertNotNil(second)
-
-        // Both occupants hold different seat slots.
-        let slots = office.sessions
-            .filter { $0.stationIndex == 0 }
-            .map(\.seatSlot)
-            .sorted()
-        XCTAssertEqual(slots, [0, 1])
-
-        // A third agent is refused: the drawing would lie.
+        // Every demo desk is taken; a second agent on any of them is
+        // refused — colleagues don't share chairs.
         XCTAssertFalse(office.canAddSession(onStation: 0))
         XCTAssertNil(office.startSession(onStation: 0))
-    }
-
-    func testEndingASessionFreesItsSeat() {
-        let office = makeInstantOffice()
-        let second = office.startSession(onStation: 0)!
-        office.endSession(second)
-        XCTAssertTrue(office.canAddSession(onStation: 0))
-        XCTAssertEqual(office.seatCount(onStation: 0), 1)
-        XCTAssertEqual(office.workstations.count, 3,
-                       "the desk stays while a colleague still works there")
     }
 
     func testEndingTheLastSessionRemovesTheDesk() {
@@ -73,9 +54,9 @@ final class OfficeTests: XCTestCase {
 
     func testTwinFoldersShowTheirParentFolder() {
         let office = Office(sleeper: { _ in })
-        _ = office.workstationIndex(forPath: "/work/backend/api")
-        _ = office.workstationIndex(forPath: "/work/client/api")
-        _ = office.workstationIndex(forPath: "/work/blog")
+        _ = office.addWorkstation(forPath: "/work/backend/api")
+        _ = office.addWorkstation(forPath: "/work/client/api")
+        _ = office.addWorkstation(forPath: "/work/blog")
 
         XCTAssertEqual(office.displayName(forStation: 0), "backend/api")
         XCTAssertEqual(office.displayName(forStation: 1), "client/api")
@@ -83,16 +64,19 @@ final class OfficeTests: XCTestCase {
                        "a unique name needs no qualifier")
     }
 
-    func testAgentsSharingADeskGetSeatNumbers() {
-        let office = makeInstantOffice()
-        let first = office.sessions[0]
-        XCTAssertEqual(office.displayName(for: first), "circle",
-                       "a lone agent wears the plain project name")
+    func testTheSameFolderTwiceGetsNumberedDesks() {
+        let office = Office(sleeper: { _ in })
+        _ = office.addWorkstation(forPath: "/repo/circle")
+        _ = office.addWorkstation(forPath: "/repo/circle")
+        _ = office.addWorkstation(forPath: "/repo/blog")
 
-        _ = office.startSession(onStation: 0)
-        let mates = office.sessions.filter { $0.stationIndex == 0 }
-        XCTAssertEqual(Set(mates.map { office.displayName(for: $0) }),
-                       ["circle · 1", "circle · 2"])
+        XCTAssertEqual(office.workstations.count, 3,
+                       "two terminals in one folder are two desks")
+        XCTAssertEqual(office.displayName(forStation: 0), "circle · 1")
+        XCTAssertEqual(office.displayName(forStation: 1), "circle · 2")
+        XCTAssertEqual(office.displayName(forStation: 2), "blog")
+        XCTAssertNotEqual(office.workstations[0].id, office.workstations[1].id,
+                          "twin desks keep distinct identities (and outfits)")
     }
 
     // MARK: Waiting for input

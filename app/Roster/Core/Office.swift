@@ -34,12 +34,15 @@ enum AgentPhase: Equatable {
     case walkingBack
 }
 
-/// One desk in the room = one project (a repository, in real life).
-/// A desk exists exactly as long as a session works there — when the
-/// last one ends, the desk leaves with it (see `endSession`).
+/// One desk in the room = one SESSION. Two terminals in the same folder
+/// are two colleagues, and colleagues don't share chairs — each gets its
+/// own desk (numbered "circle · 1", "circle · 2" when needed). A desk
+/// exists exactly as long as its session runs; when the session ends, the
+/// desk leaves with it (see `endSession`).
 struct Workstation: Identifiable, Equatable {
-    /// Stable identity: the repository path for real stations, a "demo-…"
-    /// string for simulated ones.
+    /// Unique identity — the repository path plus a serial for twins
+    /// ("​/repo/circle#2"), or a "demo-…" string for simulated desks. The
+    /// outfit derives from it, so twin desks dress differently.
     let id: String
     var name: String
     /// Filesystem path of the repository, when this is a real project.
@@ -50,15 +53,13 @@ struct Workstation: Identifiable, Equatable {
 /// `Office.sessions` is exactly what lets `@Observable` notice a change.
 struct AgentSession: Identifiable, Equatable {
     let id: Int
-    /// Index into `Office.workstations` — the project this agent works on.
-    /// `var`, not `let`: when a desk earlier in the row dies with its last
+    /// Index into `Office.workstations` — this agent's own desk.
+    /// `var`, not `let`: when a desk earlier in the row dies with its
     /// session, everyone past it shifts down one index (see
     /// `removeWorkstation(at:)`).
     var stationIndex: Int
     var status: SessionStatus = .working
     var phase: AgentPhase = .seated
-    /// 0 or 1 — two agents can share one station.
-    var seatSlot: Int = 0
     /// Position in the queue at your desk, assigned when the walk starts.
     var deskSlot: Int = 0
 }
@@ -135,14 +136,15 @@ final class Office {
         sessions.first { $0.id == id }
     }
 
-    /// How many agents currently occupy a station (drives seat spreading).
+    /// How many agents currently occupy a station (0 or 1 — see below).
     func seatCount(onStation stationIndex: Int) -> Int {
         sessions.filter { $0.stationIndex == stationIndex }.count
     }
 
-    /// Stations hold at most two agents — beyond that the drawing lies.
+    /// One colleague per desk, always. A second session in the same
+    /// folder gets its own desk, never a shared chair.
     func canAddSession(onStation stationIndex: Int) -> Bool {
-        seatCount(onStation: stationIndex) < 2
+        seatCount(onStation: stationIndex) == 0
     }
 
     /// True when someone at this station is actually working — the monitor
@@ -156,51 +158,78 @@ final class Office {
     // MARK: Display names
     //
     // Two collisions can make the room ambiguous, and each gets its own
-    // cure: two open projects with the same folder name ("api" twice)
-    // gain their parent folder ("backend/api" vs "client/api"), and two
-    // sessions sharing one desk gain a seat number ("circle · 2").
+    // cure: two folders with the same name gain their parent folder
+    // ("backend/api" vs "client/api"), and two terminals in the SAME
+    // folder gain a desk number ("circle · 1", "circle · 2").
 
     /// The name shown for a station, disambiguated against its twins.
     func displayName(forStation stationIndex: Int) -> String {
         guard workstations.indices.contains(stationIndex) else { return "?" }
         let station = workstations[stationIndex]
-        let twins = workstations.filter { $0.name == station.name }
-        guard twins.count > 1, let path = station.path else { return station.name }
-        let parent = ((path as NSString).deletingLastPathComponent as NSString)
-            .lastPathComponent
-        return parent.isEmpty ? station.name : "\(parent)/\(station.name)"
+        let sameName = workstations.indices.filter {
+            workstations[$0].name == station.name
+        }
+        guard sameName.count > 1 else { return station.name }
+
+        // Different folders sharing a name: the parent tells them apart.
+        var base = station.name
+        let samePath = sameName.filter { workstations[$0].path == station.path }
+        if samePath.count < sameName.count, let path = station.path {
+            let parent = ((path as NSString).deletingLastPathComponent as NSString)
+                .lastPathComponent
+            if !parent.isEmpty { base = "\(parent)/\(station.name)" }
+        }
+
+        // The same folder twice (two terminals): number the desks.
+        guard samePath.count > 1,
+              let position = samePath.firstIndex(of: stationIndex)
+        else { return base }
+        return "\(base) · \(position + 1)"
     }
 
-    /// The name on an agent's pill: the station name, plus a seat number
-    /// when two sessions share the desk.
+    /// The name on an agent's pill — its desk's name, since a desk is
+    /// exactly one agent.
     func displayName(for session: AgentSession) -> String {
-        let base = displayName(forStation: session.stationIndex)
-        guard seatCount(onStation: session.stationIndex) > 1 else { return base }
-        return "\(base) · \(session.seatSlot + 1)"
+        displayName(forStation: session.stationIndex)
     }
 
     // MARK: Workstations
 
-    /// Returns the station index for a repository, creating the desk on
-    /// first sight. Nil when the room is full (capped, not scrolled).
-    func workstationIndex(forPath path: String) -> Int? {
-        if let existing = workstations.firstIndex(where: { $0.id == path }) {
-            return existing
-        }
+    /// Adds a FRESH desk for a repository — every session gets its own,
+    /// so two terminals in one folder become two desks side by side.
+    /// Nil when the room is full (capped, not scrolled). The id carries a
+    /// serial so twins stay distinct (identity, outfit).
+    func addWorkstation(forPath path: String) -> Int? {
         guard workstations.count < Self.maxStations else { return nil }
+        var serial = workstations.filter { $0.path == path }.count + 1
+        while workstations.contains(where: { $0.id == "\(path)#\(serial)" }) {
+            serial += 1
+        }
         let name = (path as NSString).lastPathComponent
-        workstations.append(Workstation(id: path, name: name, path: path))
+        workstations.append(
+            Workstation(id: "\(path)#\(serial)", name: name, path: path)
+        )
         return workstations.count - 1
+    }
+
+    /// One more colleague at a fresh demo desk — the names cycle.
+    /// Returns the new session id; nil when the room is full.
+    @discardableResult
+    func spawnDemoAgent() -> Int? {
+        let names = ["circle", "dockkeep", "blog", "api", "site", "docs"]
+        guard workstations.count < Self.maxStations else { return nil }
+        let name = names[workstations.count % names.count]
+        workstations.append(
+            Workstation(id: "demo-\(name)-\(nextID)", name: name, path: nil)
+        )
+        return startSession(onStation: workstations.count - 1)
     }
 
     /// Three fake desks with one working agent each — the demo room, used
     /// until real sessions exist, and forever by the GIF studio.
     func seedDemo() {
         guard workstations.isEmpty else { return }
-        for name in ["circle", "dockkeep", "blog"] {
-            workstations.append(Workstation(id: "demo-\(name)", name: name, path: nil))
-            startSession(onStation: workstations.count - 1)
-        }
+        for _ in 0..<3 { spawnDemoAgent() }
     }
 
     /// Removes a desk and re-points every session past it — desks live and
@@ -227,16 +256,14 @@ final class Office {
     // MARK: Domain events
 
     /// A new agent sits down at a station. Returns its id, or nil if the
-    /// station is full.
+    /// desk is already taken (one colleague per desk).
     @discardableResult
     func startSession(onStation stationIndex: Int) -> Int? {
         guard workstations.indices.contains(stationIndex),
               canAddSession(onStation: stationIndex) else { return nil }
-        let taken = Set(sessions.filter { $0.stationIndex == stationIndex }.map(\.seatSlot))
-        let slot = taken.contains(0) ? 1 : 0
         let id = nextID
         nextID += 1
-        sessions.append(AgentSession(id: id, stationIndex: stationIndex, seatSlot: slot))
+        sessions.append(AgentSession(id: id, stationIndex: stationIndex))
         return id
     }
 
