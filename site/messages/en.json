@@ -1,7 +1,7 @@
 {
   "meta": {
-    "title": "Roster — Your coding agents, in a room",
-    "description": "A macOS app that shows your Claude Code sessions as colleagues in a blueprint office. They work at their desks — and walk to yours when they're done. Free, open source, local-only."
+    "title": "Roster — An office for your coding agents",
+    "description": "A macOS app that turns your Claude Code sessions into little colleagues in a pixel office. They work at their desks — and walk to yours when they're done. Free, open source, local-only."
   },
   "nav": {
     "features": "Features",
@@ -11,36 +11,45 @@
     "github": "GitHub"
   },
   "hero": {
-    "badge": "Free & open source · MIT",
-    "title": "Your coding agents, in a room.",
-    "subtitle": "Roster turns your Claude Code sessions into colleagues in a small blueprint office. They work at their stations. They stand up when they need you. And when they finish, they cross the room to your desk.",
+    "badge": "Free & open source · macOS",
+    "title": "Your coding agents just got <mark>an office</mark>.",
+    "subtitle": "Roster turns every Claude Code session into a little colleague in a pixel office on your Mac. They work at their desks, stand up when they need you, and walk over to yours when the job is done. You can even wander the room with your arrow keys.",
     "download": "Download for macOS",
     "github": "View on GitHub",
     "note": "macOS 14+ · Signed & notarized · No account, no telemetry",
-    "caption": "Live from the room — dockkeep just finished and is waiting at your desk."
+    "caption": "Live from the room — dockkeep just finished and is crossing over to your desk.",
+    "you": "You"
+  },
+  "ticker": {
+    "t1": "dockkeep finished — waiting at your desk",
+    "t2": "circle is heads-down, monitor breathing",
+    "t3": "blog stood up — it needs your input",
+    "t4": "api failed its last turn",
+    "t5": "you wandered off to the ping-pong table",
+    "t6": "two agents are sharing the circle desk"
   },
   "positioning": {
     "title": "Not another dashboard.",
-    "body": "Lists, diffs, kanban boards — other tools already do that well. Roster is the ambient version: a quiet room in the corner of your screen. You don't read it, you glance at it. The state of the room is the state of your agents."
+    "body": "Lists, diffs, kanban boards — other tools already do that well. Roster is the ambient version: a quiet little office in the corner of your screen. You don't read it, you glance at it. The state of the room is the state of your agents."
   },
   "features": {
     "eyebrow": "Features",
-    "title": "The room speaks for itself",
+    "title": "A room that speaks for itself",
     "f1": {
       "title": "The walk",
-      "body": "Real work earns a crossing: when an agent finishes a long task, it stands up, walks across the plan and waits at your desk until you've had a look. Discovering a finished agent twenty minutes late is over."
+      "body": "Real work earns a crossing: when an agent finishes a long task, it stands up, walks across the office and waits at your desk until you've had a look — with a native notification (and a ding) in case you're elsewhere. Discovering a finished agent twenty minutes late is over."
     },
     "f2": {
-      "title": "Five states, zero reading",
-      "body": "Seated and working. Standing when it needs your input. Walking when it's done. At your desk for review. An empty seat when idle — plus a red cross when a turn fails. One glance covers them all."
+      "title": "One glance, every state",
+      "body": "Seated and working. Standing when it needs your input. Walking when it's done. At your desk for review. A red pill when a turn fails. Desks appear with the first session on a project — and leave with the last one."
     },
     "f3": {
-      "title": "Calm by design",
-      "body": "When everyone is working, almost nothing moves — a monitor breathing, that's it. Native SwiftUI, no game-engine loop: the room costs about zero CPU while it sits with you all day."
+      "title": "Click a colleague",
+      "body": "Click an agent — in the room or in the sidebar — and its profile card slides in: the last thing it said, the repo path, one button for VS Code, one for the Terminal, one to mark the work reviewed."
     },
     "f4": {
-      "title": "Desks are projects",
-      "body": "Each desk is one of your repositories, created the moment an agent first shows up there. Two agents can share a desk, and an empty desk is information too."
+      "title": "A real little office",
+      "body": "The colleagues are real 3D — voxel bodies under a real light, turning toward wherever they walk. Stroll around with the arrow keys, zoom in when the room gets crowded, and toggle the sidebar for the roll call."
     }
   },
   "how": {
@@ -48,7 +57,7 @@
     "title": "Three small pieces, all local",
     "s1": {
       "title": "A hook",
-      "body": "With your consent, Roster adds one line to ~/.claude/settings.json — after backing it up. From then on, every session event is appended to a local spool file."
+      "body": "With your consent, Roster adds a small hook to every Claude Code settings.json it finds — each one backed up first. From then on, every session event is appended to a local spool file."
     },
     "s2": {
       "title": "A spool file",
@@ -56,14 +65,14 @@
     },
     "s3": {
       "title": "A room",
-      "body": "Events map one-to-one to the choreography: needs-input stands the agent up, a finished long turn triggers the walk, a failure pulls it back to its station."
+      "body": "Events map one-to-one to the choreography: needs-input stands the agent up, a finished long turn triggers the walk, a failure pulls it back to its station, and a closed session takes its desk along."
     },
     "privacy": "Everything stays on your Mac. Roster never reads your code — only session events. No network, no account, no telemetry."
   },
   "open": {
     "eyebrow": "Open source",
     "title": "MIT, from day one",
-    "body": "Roster is free and open source. The state machine is unit-tested, the fragile parts are isolated behind a thin layer, and the repo keeps a written log of every design decision. Good first issues are waiting for you.",
+    "body": "Roster is free and open source. The state machine is unit-tested, the fragile parts are isolated behind a thin layer, and every design decision is written down in the repo — including the researched roadmap for Gemini CLI, Codex and opencode support. Good first issues are waiting for you.",
     "star": "Star on GitHub",
     "issues": "Browse good first issues"
   },
@@ -71,7 +80,7 @@
     "title": "Questions",
     "q1": {
       "q": "Does it work with agents other than Claude Code?",
-      "a": "Not yet. V0 is deliberately Claude Code + VS Code + one Mac — depth over breadth. The issue tracker is open if you want to change that."
+      "a": "Claude Code today. But the seam is already in the code, and the research is public in docs/providers.md: Gemini CLI is first in line (its hooks are nearly identical), then opencode and Codex."
     },
     "q2": {
       "q": "Does Roster read my code?",
@@ -87,13 +96,13 @@
     }
   },
   "cta": {
-    "title": "Put your agents in a room.",
-    "body": "One DMG, one hook, and your sessions become colleagues.",
+    "title": "Give your agents a desk.",
+    "body": "One DMG, one hook — and your sessions become colleagues. The kind that walk over when they're done.",
     "download": "Download for macOS",
     "github": "Star on GitHub"
   },
   "footer": {
-    "tagline": "Your coding agents, in a room. They come to your desk when they're done.",
+    "tagline": "A little office for your coding agents. They walk to your desk when they're done.",
     "product": "Product",
     "download": "Download",
     "releases": "Releases",

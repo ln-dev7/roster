@@ -12,8 +12,10 @@ export async function SiteHeader() {
   const t = await getTranslations("nav")
 
   return (
-    <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
-      <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 px-6">
+    // Gather-style floating pill: the nav hovers over the page instead of
+    // ruling a line across it.
+    <header className="sticky top-4 z-50 px-4">
+      <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-4 rounded-full border bg-background/85 px-5 shadow-lg shadow-foreground/5 backdrop-blur-md">
         <a href="#top" className="flex items-center gap-2.5">
           <RosterMark className="size-[18px] text-foreground" />
           <span className="font-mono text-sm font-medium tracking-[0.25em]">
@@ -53,7 +55,7 @@ export async function SiteHeader() {
           </Button>
           <Button
             size="sm"
-            className="ml-1 hidden sm:inline-flex"
+            className="ml-1 hidden rounded-full sm:inline-flex"
             render={<a href={RELEASES_URL} />}
           >
             {t("download")}
