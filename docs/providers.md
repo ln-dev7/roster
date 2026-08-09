@@ -1,9 +1,16 @@
 # Supporting other coding agents
 
-Roster watches Claude Code today. This document is the honest research on
-watching everything else — Gemini CLI, Codex, Cursor, opencode, Kimi,
-DeepSeek — gathered from each tool's documentation in August 2026, with a
-feasibility verdict per tool and the architecture that makes them all fit.
+**Status (v0.2): Gemini CLI, Cursor and Codex are WIRED** — installers in
+`app/Roster/Data/ProviderInstallers.swift`, payload dialects in
+`ClaudeEvent.swift`, one shared relay script at `~/.roster/roster-hook.sh`.
+Everything below was verified against each tool's documentation, not
+against a live run: real-world validation reports are very welcome (that
+is issue-tracker material). opencode and Kimi remain research-only.
+
+This document is the honest research behind that wiring — Gemini CLI,
+Codex, Cursor, opencode, Kimi, DeepSeek — gathered from each tool's
+documentation in August 2026, with a feasibility verdict per tool and the
+architecture that makes them all fit.
 
 The code-side seam already exists: `AgentProvider`
 (`app/Roster/Data/AgentProvider.swift`) is the protocol every source

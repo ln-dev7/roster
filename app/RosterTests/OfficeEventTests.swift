@@ -138,6 +138,31 @@ final class OfficeEventTests: XCTestCase {
         XCTAssertEqual(office.sessions[0].status, .failed)
     }
 
+    // MARK: Providers
+
+    func testProviderPrefixedKeysDressTheirDesks() {
+        office.apply(.sessionStart(key: "s1", cwd: "/repo/a"))
+        office.apply(.sessionStart(key: "gemini:g1", cwd: "/repo/b"))
+        office.apply(.promptSubmitted(key: "cursor:c1", cwd: "/repo/c"))
+        office.apply(.stopped(key: "codex:t1", cwd: "/repo/d", summary: nil))
+
+        XCTAssertEqual(office.workstations.map(\.provider),
+                       [.claudeCode, .gemini, .cursor, .codex])
+    }
+
+    func testCodexEarnsTheWalkTurnToTurn() async {
+        // Codex has no prompt events: the walk rule measures the time
+        // between turn completions instead.
+        office.apply(.stopped(key: "codex:t1", cwd: "/repo/d", summary: "First."))
+        XCTAssertEqual(office.sessions[0].phase, .seated,
+                       "the first turn just materialized the desk")
+
+        advance(120)
+        await office.apply(.stopped(key: "codex:t1", cwd: nil, summary: "Second."))?.value
+        XCTAssertEqual(office.sessions[0].status, .finished)
+        XCTAssertEqual(office.sessions[0].phase, .atDesk)
+    }
+
     func testSessionEndRemovesTheAgentAndItsDesk() {
         office.apply(.sessionStart(key: "s1", cwd: "/repo/circle"))
         office.apply(.sessionEnd(key: "s1"))
@@ -214,5 +239,56 @@ final class ClaudeEventParsingTests: XCTestCase {
         XCTAssertNil(ClaudeEvent(jsonLine: "not json at all"))
         XCTAssertNil(ClaudeEvent(jsonLine: #"{"hook_event_name":"PreToolUse","session_id":"abc"}"#))
         XCTAssertNil(ClaudeEvent(jsonLine: #"{"hook_event_name":"Stop"}"#), "no session_id")
+    }
+
+    // MARK: The other dialects
+
+    func testGeminiDialect() {
+        let start = #"{"roster_provider":"gemini","hook_event_name":"SessionStart","session_id":"g1","cwd":"/repo/x"}"#
+        XCTAssertEqual(ClaudeEvent(jsonLine: start),
+                       .sessionStart(key: "gemini:g1", cwd: "/repo/x"))
+
+        let before = #"{"roster_provider":"gemini","hook_event_name":"BeforeAgent","session_id":"g1","cwd":"/repo/x","prompt":"go"}"#
+        XCTAssertEqual(ClaudeEvent(jsonLine: before),
+                       .promptSubmitted(key: "gemini:g1", cwd: "/repo/x"))
+
+        let after = #"{"roster_provider":"gemini","hook_event_name":"AfterAgent","session_id":"g1","cwd":"/repo/x","prompt_response":"Done."}"#
+        XCTAssertEqual(ClaudeEvent(jsonLine: after),
+                       .stopped(key: "gemini:g1", cwd: "/repo/x", summary: "Done."))
+
+        let notification = #"{"roster_provider":"gemini","hook_event_name":"Notification","session_id":"g1","notification_type":"ToolPermission","message":"…"}"#
+        XCTAssertEqual(ClaudeEvent(jsonLine: notification),
+                       .needsInput(key: "gemini:g1", cwd: nil))
+
+        let end = #"{"roster_provider":"gemini","hook_event_name":"SessionEnd","session_id":"g1","reason":"exit"}"#
+        XCTAssertEqual(ClaudeEvent(jsonLine: end), .sessionEnd(key: "gemini:g1"))
+    }
+
+    func testCursorDialect() {
+        let prompt = #"{"roster_provider":"cursor","hook_event_name":"beforeSubmitPrompt","conversation_id":"c1","workspace_roots":["/repo/x"],"prompt":"go"}"#
+        XCTAssertEqual(ClaudeEvent(jsonLine: prompt),
+                       .promptSubmitted(key: "cursor:c1", cwd: "/repo/x"))
+
+        let done = #"{"roster_provider":"cursor","hook_event_name":"stop","conversation_id":"c1","workspace_roots":["/repo/x"],"status":"completed"}"#
+        XCTAssertEqual(ClaudeEvent(jsonLine: done),
+                       .stopped(key: "cursor:c1", cwd: "/repo/x", summary: nil))
+
+        let failed = #"{"roster_provider":"cursor","hook_event_name":"stop","conversation_id":"c1","workspace_roots":["/repo/x"],"status":"error"}"#
+        XCTAssertEqual(ClaudeEvent(jsonLine: failed),
+                       .stopFailed(key: "cursor:c1", cwd: "/repo/x"))
+
+        let aborted = #"{"roster_provider":"cursor","hook_event_name":"stop","conversation_id":"c1","workspace_roots":["/repo/x"],"status":"aborted"}"#
+        XCTAssertNil(ClaudeEvent(jsonLine: aborted),
+                     "a cancelled turn is neither finished nor failed")
+    }
+
+    func testCodexDialect() {
+        let turn = #"{"roster_provider":"codex","type":"agent-turn-complete","thread-id":"t1","cwd":"/repo/x","last-assistant-message":"Shipped."}"#
+        XCTAssertEqual(ClaudeEvent(jsonLine: turn),
+                       .stopped(key: "codex:t1", cwd: "/repo/x", summary: "Shipped."))
+
+        XCTAssertNil(ClaudeEvent(
+            jsonLine: #"{"roster_provider":"codex","type":"something-else","thread-id":"t1"}"#
+        ))
     }
 }

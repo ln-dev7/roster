@@ -132,6 +132,7 @@ targets:
       - path: Roster/Core/ClaudeEvent.swift
       - path: Roster/Core/RoomPlan.swift
       - path: Roster/Data/HookInstaller.swift
+      - path: Roster/Data/ProviderInstallers.swift
       - path: Roster/Data/ClaudeConfigRoots.swift
     settings:
       base:

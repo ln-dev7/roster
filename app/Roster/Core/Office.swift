@@ -34,24 +34,43 @@ enum AgentPhase: Equatable {
     case walkingBack
 }
 
-/// Which tool runs a session. Only Claude Code today — the seam for the
-/// others is AgentProvider.swift + docs/providers.md. Each desk wears its
-/// provider's logo, so tomorrow's mixed office reads at a glance.
+/// Which tool runs a session. Each desk wears its provider's logo, so a
+/// mixed office reads at a glance. The wiring per tool lives in
+/// HookInstaller (Claude Code) and ProviderInstallers (the rest); the
+/// research behind it in docs/providers.md.
 enum ProviderKind: String, Equatable {
     case claudeCode
+    case gemini
+    case cursor
+    case codex
+
+    /// Every non-Claude session key is prefixed by its provider
+    /// ("gemini:<id>") at the parsing boundary — this reads it back.
+    init(sessionKey: String) {
+        if sessionKey.hasPrefix("gemini:") { self = .gemini }
+        else if sessionKey.hasPrefix("cursor:") { self = .cursor }
+        else if sessionKey.hasPrefix("codex:") { self = .codex }
+        else { self = .claudeCode }
+    }
 
     /// Name of the bundled logo asset (sourced from logos.lndev.me;
     /// the marks belong to their respective owners).
     var logoAssetName: String {
         switch self {
         case .claudeCode: return "ProviderClaude"
+        case .gemini: return "ProviderGemini"
+        case .cursor: return "ProviderCursor"
+        case .codex: return "ProviderCodex"
         }
     }
 
-    /// Shown on the detail card. A product name — never localized.
+    /// Shown on the detail card. Product names — never localized.
     var displayName: String {
         switch self {
         case .claudeCode: return "Claude Code"
+        case .gemini: return "Gemini CLI"
+        case .cursor: return "Cursor"
+        case .codex: return "Codex"
         }
     }
 }
@@ -223,7 +242,8 @@ final class Office {
     /// so two terminals in one folder become two desks side by side.
     /// Nil when the room is full (capped, not scrolled). The id carries a
     /// serial so twins stay distinct (identity, outfit).
-    func addWorkstation(forPath path: String) -> Int? {
+    func addWorkstation(forPath path: String,
+                        provider: ProviderKind = .claudeCode) -> Int? {
         guard workstations.count < Self.maxStations else { return nil }
         var serial = workstations.filter { $0.path == path }.count + 1
         while workstations.contains(where: { $0.id == "\(path)#\(serial)" }) {
@@ -231,7 +251,8 @@ final class Office {
         }
         let name = (path as NSString).lastPathComponent
         workstations.append(
-            Workstation(id: "\(path)#\(serial)", name: name, path: path)
+            Workstation(id: "\(path)#\(serial)", name: name, path: path,
+                        provider: provider)
         )
         return workstations.count - 1
     }

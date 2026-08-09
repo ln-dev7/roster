@@ -29,11 +29,27 @@ final class ClaudeCodeSource {
     /// user-added folders…). Settings displays and manages this list.
     private(set) var roots: [URL] = []
 
+    /// One row per OTHER detected tool (Gemini CLI, Cursor, Codex) —
+    /// detected means its config folder exists. Settings lists them;
+    /// Connect wires them all.
+    struct ProviderStatus: Identifiable, Equatable {
+        let kind: ProviderKind
+        let configPath: String
+        let installed: Bool
+        var id: String { kind.rawValue }
+    }
+
+    private(set) var providerStatuses: [ProviderStatus] = []
+
     private let office: Office
     @ObservationIgnored private var watcher: SpoolWatcher?
     @ObservationIgnored private var rescanTask: Task<Void, Never>?
     /// session key → transcript file, for the staleness sweep.
     @ObservationIgnored private var transcripts: [String: URL] = [:]
+    /// session key → last spool event, for sessions WITHOUT a transcript
+    /// (Cursor, Codex): those tools send no session-end, so quietness is
+    /// the only retirement signal they get.
+    @ObservationIgnored private var lastEventAt: [String: Date] = [:]
     /// Sessions that ENDED, with when. The transcript file outlives the
     /// session, and its mtime stays "fresh" for a few minutes — without
     /// this tombstone the 30-second rescan would resurrect a session the
@@ -69,6 +85,33 @@ final class ClaudeCodeSource {
         }
     }
 
+    /// The other tools, looked up fresh from disk.
+    private func detectProviders() -> [ProviderStatus] {
+        var statuses: [ProviderStatus] = []
+        if GeminiInstaller.toolDetected {
+            statuses.append(ProviderStatus(
+                kind: .gemini,
+                configPath: GeminiInstaller.defaultSettingsURL.path,
+                installed: GeminiInstaller.isInstalled()
+            ))
+        }
+        if CursorInstaller.toolDetected {
+            statuses.append(ProviderStatus(
+                kind: .cursor,
+                configPath: CursorInstaller.defaultHooksURL.path,
+                installed: CursorInstaller.isInstalled()
+            ))
+        }
+        if CodexInstaller.toolDetected {
+            statuses.append(ProviderStatus(
+                kind: .codex,
+                configPath: CodexInstaller.defaultConfigURL.path,
+                installed: CodexInstaller.isInstalled()
+            ))
+        }
+        return statuses
+    }
+
     /// Called at launch and whenever the root list may have changed
     /// (Settings adds a folder, an alias creates a new config dir…).
     ///
@@ -79,20 +122,23 @@ final class ClaudeCodeSource {
     /// states (waiting for input, finished, failed) and the walk.
     func refresh() {
         roots = ClaudeConfigRoots.discover()
-        if allRootsInstalled {
-            log.info("hooks installed in all \(self.roots.count) root(s)")
+        providerStatuses = detectProviders()
+        let providersWired = providerStatuses.allSatisfy(\.installed)
+        if allRootsInstalled && providersWired {
+            log.info("hooks installed in all \(self.roots.count) root(s) and \(self.providerStatuses.count) provider(s)")
             state = .connected
         } else {
-            log.info("hooks missing in at least one root; presence-only until consent")
+            log.info("wiring missing somewhere; presence-only until consent")
             state = .notConnected
         }
         startFeeds()
     }
 
-    /// The consent button. Installs (or upgrades) the hook set in EVERY
-    /// known root — each with its own backup. The feeds are already
-    /// running; from here the spools start filling. The first error lands
-    /// in `state` for the banner to display.
+    /// The consent button. Installs (or upgrades) the wiring EVERYWHERE —
+    /// every Claude Code root, plus every other detected tool — each
+    /// config with its own backup. The feeds are already running; from
+    /// here the spool starts filling. The first error lands in `state`
+    /// for the banner to display.
     func connect() {
         roots = ClaudeConfigRoots.discover()
         var firstError: Error?
@@ -105,6 +151,24 @@ final class ClaudeCodeSource {
                 firstError = firstError ?? error
             }
         }
+
+        // The other tools, one installer each — only where detected.
+        let installs: [(detected: Bool, name: String, install: () throws -> Void)] = [
+            (GeminiInstaller.toolDetected, "gemini", { try GeminiInstaller.install() }),
+            (CursorInstaller.toolDetected, "cursor", { try CursorInstaller.install() }),
+            (CodexInstaller.toolDetected, "codex", { try CodexInstaller.install() }),
+        ]
+        for item in installs where item.detected {
+            do {
+                try item.install()
+                log.info("wired \(item.name, privacy: .public)")
+            } catch {
+                log.error("\(item.name, privacy: .public) install failed: \(error.localizedDescription)")
+                firstError = firstError ?? error
+            }
+        }
+
+        providerStatuses = detectProviders()
         if let firstError {
             state = .failed(firstError.localizedDescription)
         } else {
@@ -153,11 +217,13 @@ final class ClaudeCodeSource {
         case .sessionEnd(let key):
             // Tombstone first, so the rescan can't resurrect it.
             endedAt[key] = Date()
+            lastEventAt[key] = nil
         case .sessionStart(let key, _), .promptSubmitted(let key, _),
              .needsInput(let key, _), .completed(let key, _),
              .stopped(let key, _, _), .stopFailed(let key, _):
             // Any sign of life lifts a tombstone (resumed session).
             endedAt[key] = nil
+            lastEventAt[key] = Date()
         }
 
         // withAnimation so session arrivals/departures fade like the demo
@@ -234,6 +300,20 @@ final class ClaudeCodeSource {
                     office.apply(.sessionEnd(key: key))
                 }
                 transcripts[key] = nil
+                lastEventAt[key] = nil
+            }
+        }
+
+        // Transcript-less sessions (Cursor, Codex) retire on event
+        // quietness alone — their tools never say goodbye.
+        for (key, at) in lastEventAt where transcripts[key] == nil {
+            if Date().timeIntervalSince(at) > staleAfter {
+                log.info("session \(key, privacy: .public) quiet; retiring")
+                endedAt[key] = Date()
+                _ = withAnimation(.easeOut(duration: 0.45)) {
+                    office.apply(.sessionEnd(key: key))
+                }
+                lastEventAt[key] = nil
             }
         }
 

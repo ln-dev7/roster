@@ -43,6 +43,11 @@ extension Office {
                 lastSummary[id] = summary
             }
             let workedFor = lastPromptAt[id].map { now().timeIntervalSince($0) } ?? 0
+            // Reset the clock at every stop too. Harmless for tools with
+            // prompt events (the next prompt overwrites it) and essential
+            // for Codex, which only ever says "turn complete": there, the
+            // walk rule measures turn-to-turn time.
+            lastPromptAt[id] = now()
             if workedFor >= finishThreshold {
                 return finish(id)
             } else {
@@ -72,7 +77,10 @@ extension Office {
     private func ensureSession(key: String, cwd: String?) -> Int? {
         if let id = externalToID[key] { return id }
         guard let cwd,
-              let stationIndex = addWorkstation(forPath: cwd),
+              let stationIndex = addWorkstation(
+                  forPath: cwd,
+                  provider: ProviderKind(sessionKey: key)
+              ),
               let id = startSession(onStation: stationIndex)
         else { return nil }
         externalToID[key] = id
