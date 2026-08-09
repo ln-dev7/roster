@@ -17,6 +17,12 @@ struct ContentView: View {
     /// level, so the room stays visible in a corner while you work.
     @AppStorage("keepOnTop") private var keepOnTop = false
 
+    /// The selected session (room click, desk click or sidebar row — all
+    /// the same value). Non-nil opens the detail card over the room; the
+    /// card vanishes on ✕, on a floor click, or when the session ends —
+    /// a stale id simply stops resolving and nothing renders.
+    @State private var selectedSessionID: Int?
+
     private var isPanelVisible: Bool {
         // Before connection the panel is the only way to see the product
         // move, so it stays. After that, it's opt-in.
@@ -25,7 +31,7 @@ struct ContentView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            SidebarView(office: office, source: source)
+            SidebarView(office: office, source: source, selection: $selectedSessionID)
             Divider()
 
             VStack(spacing: 0) {
@@ -38,7 +44,20 @@ struct ContentView: View {
                     EmptyView()
                 }
 
-                RoomView(office: office)
+                // The room, with the Gather-style detail card floating
+                // over its right edge when an agent is selected.
+                ZStack(alignment: .topTrailing) {
+                    RoomView(office: office, selection: $selectedSessionID)
+
+                    if let id = selectedSessionID, let session = office.session(id) {
+                        DetailCard(office: office, session: session) {
+                            selectedSessionID = nil
+                        }
+                        .padding(12)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
+                }
+                .animation(.easeOut(duration: 0.22), value: selectedSessionID)
 
                 if isPanelVisible {
                     Divider()

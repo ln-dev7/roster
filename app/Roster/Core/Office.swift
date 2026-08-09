@@ -35,9 +35,9 @@ enum AgentPhase: Equatable {
 }
 
 /// One desk in the room = one project (a repository, in real life).
-/// Stations persist even when empty — an empty desk is a state, not a gap.
-/// Codable because known desks survive restarts (WorkstationStore).
-struct Workstation: Identifiable, Equatable, Codable {
+/// A desk exists exactly as long as a session works there — when the
+/// last one ends, the desk leaves with it (see `endSession`).
+struct Workstation: Identifiable, Equatable {
     /// Stable identity: the repository path for real stations, a "demo-…"
     /// string for simulated ones.
     let id: String
@@ -100,7 +100,7 @@ final class Office {
     @ObservationIgnored var externalToID: [String: Int] = [:]
     /// When each session last received a prompt — used by the walk rule.
     @ObservationIgnored var lastPromptAt: [Int: Date] = [:]
-    /// Last assistant message per session — shown by the agent popover, so
+    /// Last assistant message per session — shown by the detail card, so
     /// it participates in observation (unlike the bookkeeping above).
     var lastSummary: [Int: String] = [:]
 
@@ -164,17 +164,6 @@ final class Office {
         return workstations.count - 1
     }
 
-    /// Re-adds a desk remembered from a previous launch. Returns false on
-    /// duplicates or a full room. The desk comes back empty — an agent
-    /// only appears when a session actually runs there.
-    @discardableResult
-    func restoreWorkstation(_ workstation: Workstation) -> Bool {
-        guard !workstations.contains(where: { $0.id == workstation.id }),
-              workstations.count < Self.maxStations else { return false }
-        workstations.append(workstation)
-        return true
-    }
-
     /// Three fake desks with one working agent each — the demo room, used
     /// until real sessions exist, and forever by the GIF studio.
     func seedDemo() {
@@ -182,6 +171,16 @@ final class Office {
         for name in ["circle", "dockkeep", "blog"] {
             workstations.append(Workstation(id: "demo-\(name)", name: name, path: nil))
             startSession(onStation: workstations.count - 1)
+        }
+    }
+
+    /// Removes a desk and re-points every session past it — desks live and
+    /// die with their sessions, so indices must stay dense.
+    private func removeWorkstation(at stationIndex: Int) {
+        guard workstations.indices.contains(stationIndex) else { return }
+        workstations.remove(at: stationIndex)
+        for i in sessions.indices where sessions[i].stationIndex > stationIndex {
+            sessions[i].stationIndex -= 1
         }
     }
 
@@ -281,8 +280,10 @@ final class Office {
         sessions[i].phase = .standing
     }
 
-    /// The session is gone; the dot fades out (the view's removal
+    /// The session is gone; the agent fades out (the view's removal
     /// transition handles the fade — wrap calls in `withAnimation`).
+    /// When it was the desk's last occupant, the desk leaves with it:
+    /// the room only ever shows what's alive.
     func endSession(_ id: Int) {
         invalidateChoreography(for: id)
         generations[id] = nil
@@ -291,7 +292,14 @@ final class Office {
         if let key = externalToID.first(where: { $0.value == id })?.key {
             externalToID[key] = nil
         }
-        sessions.removeAll { $0.id == id }
+
+        guard let index = sessions.firstIndex(where: { $0.id == id }) else { return }
+        let stationIndex = sessions[index].stationIndex
+        sessions.remove(at: index)
+
+        if !sessions.contains(where: { $0.stationIndex == stationIndex }) {
+            removeWorkstation(at: stationIndex)
+        }
     }
 
     // MARK: Choreography plumbing

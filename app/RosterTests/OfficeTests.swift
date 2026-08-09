@@ -52,6 +52,21 @@ final class OfficeTests: XCTestCase {
         office.endSession(second)
         XCTAssertTrue(office.canAddSession(onStation: 0))
         XCTAssertEqual(office.seatCount(onStation: 0), 1)
+        XCTAssertEqual(office.workstations.count, 3,
+                       "the desk stays while a colleague still works there")
+    }
+
+    func testEndingTheLastSessionRemovesTheDesk() {
+        let office = makeInstantOffice()
+        // Demo room: one agent per desk. Ending the middle one must take
+        // its desk along — and re-point the sessions past it, since desk
+        // indices stay dense.
+        office.endSession(office.sessions[1].id)
+
+        XCTAssertEqual(office.workstations.count, 2)
+        XCTAssertEqual(office.sessions.count, 2)
+        XCTAssertEqual(office.sessions.map(\.stationIndex), [0, 1],
+                       "sessions after the removed desk shift down")
     }
 
     // MARK: Waiting for input
@@ -126,7 +141,7 @@ final class OfficeTests: XCTestCase {
         XCTAssertEqual(Set(slots).count, 2, "queued agents must not overlap")
     }
 
-    // MARK: Arrival callback & restored desks
+    // MARK: Arrival callback
 
     func testArrivalCallbackFiresExactlyOnceAtTheDesk() async {
         let office = makeInstantOffice()
@@ -140,23 +155,6 @@ final class OfficeTests: XCTestCase {
         // The return leg must not fire it again.
         await office.resumeWorking(id)?.value
         XCTAssertEqual(arrivals, [id])
-    }
-
-    func testRestoreWorkstationDedupsAndRespectsTheCap() {
-        let office = Office(sleeper: { _ in })
-        let desk = Workstation(id: "/repo/circle", name: "circle", path: "/repo/circle")
-
-        XCTAssertTrue(office.restoreWorkstation(desk))
-        XCTAssertFalse(office.restoreWorkstation(desk), "duplicates refused")
-        XCTAssertEqual(office.workstations.count, 1)
-        XCTAssertTrue(office.sessions.isEmpty, "restored desks come back empty")
-
-        for i in 0..<10 {
-            office.restoreWorkstation(
-                Workstation(id: "/repo/p\(i)", name: "p\(i)", path: "/repo/p\(i)")
-            )
-        }
-        XCTAssertEqual(office.workstations.count, Office.maxStations)
     }
 
     // MARK: Failure & interruption

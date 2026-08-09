@@ -134,16 +134,28 @@ final class OfficeEventTests: XCTestCase {
         XCTAssertEqual(office.sessions[0].status, .failed)
     }
 
-    func testSessionEndClearsTheSeatButKeepsTheDesk() {
+    func testSessionEndRemovesTheAgentAndItsDesk() {
         office.apply(.sessionStart(key: "s1", cwd: "/repo/circle"))
         office.apply(.sessionEnd(key: "s1"))
 
         XCTAssertTrue(office.sessions.isEmpty)
-        XCTAssertEqual(office.workstations.count, 1, "an empty desk is a state, not a gap")
+        XCTAssertTrue(office.workstations.isEmpty,
+                      "desks live and die with their sessions")
 
         // The same session id ending twice is harmless.
         office.apply(.sessionEnd(key: "s1"))
         XCTAssertTrue(office.sessions.isEmpty)
+    }
+
+    func testSharedDeskSurvivesUntilItsLastSessionEnds() {
+        office.apply(.sessionStart(key: "s1", cwd: "/repo/circle"))
+        office.apply(.sessionStart(key: "s2", cwd: "/repo/circle"))
+
+        office.apply(.sessionEnd(key: "s1"))
+        XCTAssertEqual(office.workstations.count, 1, "a colleague still works there")
+
+        office.apply(.sessionEnd(key: "s2"))
+        XCTAssertTrue(office.workstations.isEmpty)
     }
 }
 

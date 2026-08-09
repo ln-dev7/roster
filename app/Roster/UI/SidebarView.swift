@@ -1,13 +1,16 @@
 import SwiftUI
 
 /// The left panel: who's in the room and in what state, grouped by
-/// urgency — what needs you first. Clicking a row opens the same popover
-/// as clicking the agent in the room. The footer carries the in-app
-/// Settings button (DockKeep habit) and the app version.
+/// urgency — what needs you first. Clicking a row selects the agent, the
+/// same selection as clicking it in the room: the detail card opens on
+/// the right. The footer carries the in-app Settings button (DockKeep
+/// habit) and the app version.
 struct SidebarView: View {
 
     let office: Office
     let source: ClaudeCodeSource
+    /// Shared with the room and the detail card.
+    @Binding var selection: Int?
 
     private var needsYou: [AgentSession] {
         office.sessions.filter { $0.status == .waitingForInput || $0.status == .failed }
@@ -17,11 +20,6 @@ struct SidebarView: View {
     }
     private var working: [AgentSession] {
         office.sessions.filter { $0.status == .working }
-    }
-    private var emptyDesks: [Int] {
-        office.workstations.indices.filter { index in
-            !office.sessions.contains { $0.stationIndex == index }
-        }
     }
 
     var body: some View {
@@ -46,7 +44,7 @@ struct SidebarView: View {
 
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    if office.sessions.isEmpty && office.workstations.isEmpty {
+                    if office.sessions.isEmpty {
                         Text("No sessions yet — open a Claude Code session.")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
@@ -55,7 +53,6 @@ struct SidebarView: View {
                     sessionSection(title: "Needs you", sessions: needsYou)
                     sessionSection(title: "At your desk", sessions: atYourDesk)
                     sessionSection(title: "Working", sessions: working)
-                    emptyDeskSection
                 }
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -90,29 +87,7 @@ struct SidebarView: View {
             VStack(alignment: .leading, spacing: 4) {
                 sectionHeader(title, count: sessions.count)
                 ForEach(sessions) { session in
-                    SidebarSessionRow(office: office, session: session)
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var emptyDeskSection: some View {
-        if !emptyDesks.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-                sectionHeader("Empty desks", count: emptyDesks.count)
-                ForEach(emptyDesks, id: \.self) { index in
-                    HStack(spacing: 8) {
-                        Circle()
-                            .strokeBorder(Color.secondary.opacity(0.5), lineWidth: 1.5)
-                            .frame(width: 8, height: 8)
-                        Text(verbatim: office.workstations[index].name)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                    }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 3)
+                    SidebarSessionRow(office: office, session: session, selection: $selection)
                 }
             }
         }
@@ -136,12 +111,13 @@ struct SidebarView: View {
     }
 }
 
-/// One session in the list. Its own view so each row owns its popover.
+/// One session in the list. Clicking it selects the agent — the row gets
+/// a quiet tint while its detail card is open.
 private struct SidebarSessionRow: View {
 
     let office: Office
     let session: AgentSession
-    @State private var showActions = false
+    @Binding var selection: Int?
 
     private var name: String {
         office.workstations.indices.contains(session.stationIndex)
@@ -151,7 +127,7 @@ private struct SidebarSessionRow: View {
 
     var body: some View {
         Button {
-            showActions = true
+            selection = session.id
         } label: {
             HStack(spacing: 8) {
                 Circle()
@@ -172,8 +148,9 @@ private struct SidebarSessionRow: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .popover(isPresented: $showActions, arrowEdge: .trailing) {
-            AgentPopover(office: office, session: session)
-        }
+        .background(
+            selection == session.id ? Color.accentColor.opacity(0.14) : Color.clear,
+            in: RoundedRectangle(cornerRadius: 5)
+        )
     }
 }

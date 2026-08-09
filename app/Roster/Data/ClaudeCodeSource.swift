@@ -50,8 +50,6 @@ final class ClaudeCodeSource {
     /// user just quit. A transcript modified AFTER its tombstone means
     /// the session was resumed, and the tombstone is lifted.
     @ObservationIgnored private var endedAt: [String: Date] = [:]
-    /// How many desks were last persisted — save only when it changes.
-    @ObservationIgnored private var savedStationCount = 0
 
     private let log = Logger(subsystem: "com.lndev.roster", category: "source")
 
@@ -127,13 +125,6 @@ final class ClaudeCodeSource {
     // MARK: - Feeds
 
     private func startFeeds() {
-        // Desks remembered from previous launches come back first (empty),
-        // so the room opens familiar instead of blank.
-        for workstation in WorkstationStore.load() {
-            office.restoreWorkstation(workstation)
-        }
-        savedStationCount = office.workstations.count
-
         if watcher == nil {
             let watcher = SpoolWatcher(url: Self.spoolURL) { [weak self] line in
                 self?.handle(line: line)
@@ -184,15 +175,6 @@ final class ClaudeCodeSource {
         _ = withAnimation(.easeOut(duration: 0.45)) {
             office.apply(event)
         }
-        persistWorkstationsIfNeeded()
-    }
-
-    /// Remembers real desks (the ones with a repository path) whenever a
-    /// new one appears.
-    private func persistWorkstationsIfNeeded() {
-        guard office.workstations.count != savedStationCount else { return }
-        savedStationCount = office.workstations.count
-        WorkstationStore.save(office.workstations.filter { $0.path != nil })
     }
 
     // MARK: - Transcript scan
@@ -250,7 +232,6 @@ final class ClaudeCodeSource {
         if found > 0 {
             log.info("transcript scan: \(found) live session(s) across \(self.roots.count) root(s)")
         }
-        persistWorkstationsIfNeeded()
 
         // Retire tracked sessions whose transcript has gone quiet — they
         // ended while nobody was listening (or before the hook existed).

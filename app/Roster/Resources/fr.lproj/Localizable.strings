@@ -7,7 +7,6 @@
 "Needs you" = "Besoin de toi";
 "At your desk" = "À ton bureau";
 "Working" = "Au travail";
-"Empty desks" = "Postes vides";
 "No sessions yet — open a Claude Code session." = "Aucune session — lance une session Claude Code.";
 "Settings" = "Réglages";
 "Connected to Claude Code" = "Connecté à Claude Code";
@@ -23,11 +22,12 @@
 "Connect" = "Connecter";
 "Retry" = "Réessayer";
 
-/* ── Agent popover ── */
+/* ── Detail card ── */
 "No summary yet — it appears after the agent's first finished turn." = "Pas encore de résumé — il apparaît après le premier tour terminé de l'agent.";
 "Open in VS Code" = "Ouvrir dans VS Code";
 "Open Terminal" = "Ouvrir le Terminal";
 "Reviewed" = "Review faite";
+"Close" = "Fermer";
 
 /* ── Simulation panel ── */
 "Simulate" = "Simulation";
@@ -65,6 +65,9 @@
 
 /* ── Room ── */
 "You" = "Toi";
+"Zoom in" = "Zoomer";
+"Zoom out" = "Dézoomer";
+"Reset zoom" = "Réinitialiser le zoom";
 
 /* ── Notification ── */
 "Finished — waiting at your desk." = "Terminé — il t'attend à ton bureau.";

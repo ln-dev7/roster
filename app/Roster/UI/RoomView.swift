@@ -4,69 +4,183 @@ import SwiftUI
 /// walls, pods, lounge), with live layers on top: breathing monitor
 /// glows, the agents with their name pills, and you at your desk.
 ///
-/// Still calm, still cheap: SwiftUI is retained-mode, so nothing costs a
-/// frame while nothing changes. The only per-frame work is the walk
-/// itself (position tween + a 7 fps step timer that pauses when nobody
-/// walks).
+/// The whole scene lives inside a two-axis `ScrollView`. At ×1 the room
+/// fits the window exactly, so nothing scrolls and everything looks as
+/// before; the zoom buttons grow the content so a crowded room can be
+/// inspected up close. Feeding the enlarged content size back into
+/// `RoomPlan.transform` yields exactly fit × zoom, so the canvas and the
+/// overlay layers keep sharing the one transform they always had.
+///
+/// Clicking an agent (or its desk) selects it — the detail card that
+/// opens on the right belongs to `ContentView`; the room only owns the
+/// selection value. Clicking the floor clears it, like in Gather.
 struct RoomView: View {
 
     let office: Office
+    /// The selected session id, shared with the sidebar and the card.
+    @Binding var selection: Int?
+
     @Environment(\.colorScheme) private var colorScheme
+
+    /// Zoom factor on top of scale-to-fit. Values below 1 would only add
+    /// empty margins around the scene, so the range starts at 1.
+    @State private var zoom: CGFloat = 1
+
+    private static let zoomRange: ClosedRange<CGFloat> = 1...3
 
     var body: some View {
         let palette = PixelPalette.current(for: colorScheme)
-        let stationCount = office.workstations.count
 
         GeometryReader { geo in
-            let (scale, offset) = RoomPlan.transform(in: geo.size)
-            let map = { (p: CGPoint) in
-                CGPoint(x: offset.x + p.x * scale, y: offset.y + p.y * scale)
+            let fit = RoomPlan.transform(in: geo.size).scale
+            let content = CGSize(
+                width: max(geo.size.width, RoomPlan.size.width * fit * zoom),
+                height: max(geo.size.height, RoomPlan.size.height * fit * zoom)
+            )
+
+            ScrollView([.horizontal, .vertical]) {
+                room(contentSize: content, palette: palette)
+                    .frame(width: content.width, height: content.height)
             }
-
-            ZStack {
-                PixelSceneCanvas(palette: palette, stationCount: stationCount)
-
-                // Screens glow while someone works at the pod.
-                ForEach(office.workstations.indices, id: \.self) { index in
-                    if office.hasWorkingAgent(onStation: index) {
-                        let screen = RoomPlan.pod(index: index, of: stationCount).screen
-                        ScreenGlow(palette: palette)
-                            .frame(width: screen.width * scale, height: screen.height * scale)
-                            .position(map(CGPoint(x: screen.midX, y: screen.midY)))
-                    }
-                }
-                ScreenGlow(palette: palette)
-                    .frame(width: RoomPlan.youScreen.width * scale,
-                           height: RoomPlan.youScreen.height * scale)
-                    .position(map(CGPoint(x: RoomPlan.youScreen.midX, y: RoomPlan.youScreen.midY)))
-
-                // You, at your desk.
-                PixelCharacter(
-                    name: String(localized: "You"),
-                    look: .you,
-                    pose: .seated,
-                    pillColor: Color(hex: 0x8A8F98),
-                    scale: scale,
-                    shadow: palette.shadow,
-                    feet: map(RoomPlan.youSeat)
-                )
-
-                // The agents.
-                ForEach(office.sessions) { session in
-                    PixelAgentView(
-                        office: office,
-                        session: session,
-                        pod: RoomPlan.pod(index: session.stationIndex, of: stationCount),
-                        seatCount: office.seatCount(onStation: session.stationIndex),
-                        scale: scale,
-                        palette: palette,
-                        map: map
-                    )
-                    .transition(.opacity.combined(with: .scale(scale: 0.4)))
-                }
+            .background(palette.floorB)
+            .overlay(alignment: .bottomTrailing) {
+                ZoomControls(zoom: $zoom, range: Self.zoomRange)
+                    .padding(10)
             }
         }
-        .background(palette.floorB)
+    }
+
+    /// Everything inside the scroll content, at one moment's transform.
+    @ViewBuilder
+    private func room(contentSize: CGSize, palette: PixelPalette) -> some View {
+        let stationCount = office.workstations.count
+        let (scale, offset) = RoomPlan.transform(in: contentSize)
+        let map = { (p: CGPoint) in
+            CGPoint(x: offset.x + p.x * scale, y: offset.y + p.y * scale)
+        }
+
+        ZStack {
+            PixelSceneCanvas(palette: palette, stationCount: stationCount)
+                // Clicking the floor deselects — the card slides away.
+                .onTapGesture { selection = nil }
+
+            // Invisible tap targets over each pod's carpet: clicking a
+            // desk selects whoever works there. The sprites above win the
+            // hit-test when you aim at them directly.
+            ForEach(office.workstations.indices, id: \.self) { index in
+                let carpet = RoomPlan.pod(index: index, of: stationCount).carpet
+                Color.clear
+                    .frame(width: carpet.width * scale, height: carpet.height * scale)
+                    .contentShape(Rectangle())
+                    // The gesture attaches BEFORE `.position` — after it,
+                    // the positioned wrapper fills the whole room and one
+                    // desk would swallow every click.
+                    .onTapGesture {
+                        selection = office.sessions
+                            .first { $0.stationIndex == index }?.id
+                    }
+                    .position(map(CGPoint(x: carpet.midX, y: carpet.midY)))
+            }
+
+            // Screens glow while someone works at the pod. Not clickable:
+            // they must never shade the desk's tap target below.
+            ForEach(office.workstations.indices, id: \.self) { index in
+                if office.hasWorkingAgent(onStation: index) {
+                    let screen = RoomPlan.pod(index: index, of: stationCount).screen
+                    ScreenGlow(palette: palette)
+                        .frame(width: screen.width * scale, height: screen.height * scale)
+                        .position(map(CGPoint(x: screen.midX, y: screen.midY)))
+                        .allowsHitTesting(false)
+                }
+            }
+            ScreenGlow(palette: palette)
+                .frame(width: RoomPlan.youScreen.width * scale,
+                       height: RoomPlan.youScreen.height * scale)
+                .position(map(CGPoint(x: RoomPlan.youScreen.midX, y: RoomPlan.youScreen.midY)))
+                .allowsHitTesting(false)
+
+            // You, at your desk.
+            PixelCharacter(
+                name: String(localized: "You"),
+                look: .you,
+                pose: .seated,
+                pillColor: Color(hex: 0x8A8F98),
+                scale: scale,
+                shadow: palette.shadow,
+                feet: map(RoomPlan.youSeat)
+            )
+
+            // The agents.
+            ForEach(office.sessions) { session in
+                PixelAgentView(
+                    office: office,
+                    session: session,
+                    pod: RoomPlan.pod(index: session.stationIndex, of: stationCount),
+                    seatCount: office.seatCount(onStation: session.stationIndex),
+                    isSelected: selection == session.id,
+                    scale: scale,
+                    palette: palette,
+                    map: map,
+                    onTap: { selection = session.id }
+                )
+                .transition(.opacity.combined(with: .scale(scale: 0.4)))
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Zoom controls: the little − / % / ＋ capsule in the room's corner.
+// The percent label doubles as the reset button.
+// ─────────────────────────────────────────────────────────────────────────
+
+private struct ZoomControls: View {
+
+    @Binding var zoom: CGFloat
+    let range: ClosedRange<CGFloat>
+
+    /// One press multiplies (or divides) by this — small enough to feel
+    /// smooth, big enough to matter.
+    private let step: CGFloat = 1.25
+
+    var body: some View {
+        HStack(spacing: 0) {
+            button("minus", help: "Zoom out", disabled: zoom <= range.lowerBound) {
+                zoom = max(range.lowerBound, zoom / step)
+            }
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { zoom = range.lowerBound }
+            } label: {
+                Text(verbatim: "\(Int((zoom * 100).rounded()))%")
+                    .font(.caption.monospacedDigit())
+                    .frame(width: 42)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Reset zoom")
+            button("plus", help: "Zoom in", disabled: zoom >= range.upperBound) {
+                zoom = min(range.upperBound, zoom * step)
+            }
+        }
+        .padding(.vertical, 5)
+        .padding(.horizontal, 6)
+        .background(.regularMaterial, in: Capsule())
+        .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
+    }
+
+    private func button(_ symbol: String, help: LocalizedStringKey,
+                        disabled: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) { action() }
+        } label: {
+            Image(systemName: symbol)
+                .font(.caption.weight(.semibold))
+                .frame(width: 22, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .help(help)
     }
 }
 
@@ -246,7 +360,8 @@ private struct ScreenGlow: View {
 
 // ─────────────────────────────────────────────────────────────────────────
 // One agent: sprite + name pill, moved by the same phase machinery as
-// ever. The pill's dot carries the status color used across the app.
+// ever. The pill's dot carries the status color used across the app;
+// a click selects the agent (the detail card opens on the right).
 // ─────────────────────────────────────────────────────────────────────────
 
 private struct PixelAgentView: View {
@@ -255,11 +370,11 @@ private struct PixelAgentView: View {
     let session: AgentSession
     let pod: RoomPlan.Pod
     let seatCount: Int
+    let isSelected: Bool
     let scale: CGFloat
     let palette: PixelPalette
     let map: (CGPoint) -> CGPoint
-
-    @State private var showActions = false
+    let onTap: () -> Void
 
     private var name: String {
         office.workstations.indices.contains(session.stationIndex)
@@ -311,11 +426,17 @@ private struct PixelAgentView: View {
                 )
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture { showActions = true }
-        .popover(isPresented: $showActions, arrowEdge: .bottom) {
-            AgentPopover(office: office, session: session)
+        // The selection ring, on the ground under the agent's feet.
+        .background(alignment: .bottom) {
+            if isSelected {
+                Ellipse()
+                    .stroke(session.status.uiColor, lineWidth: 2)
+                    .frame(width: 15 * scale, height: 6 * scale)
+                    .offset(y: 2 * scale)
+            }
         }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onTap)
         // Feet-anchored: the container's center sits half its height above.
         .position(x: mapped.x, y: mapped.y - (spriteHeight + pillHeight + 2) / 2)
         .animation(transition, value: session.phase)

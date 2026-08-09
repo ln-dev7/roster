@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// How a session status presents itself outside the room: the sidebar and
-/// the popover share these. (Inside the room, shape carries state; out
+/// the detail card share these. (Inside the room, shape carries state; out
 /// here in regular UI, a label and a color are the right vocabulary.)
 extension SessionStatus {
 
