@@ -145,24 +145,39 @@ function Body({
     )
   }
 
-  // Walking: one leg grounded, one lifted, swapped each frame; the body
-  // bobs on the off-beat — the app's two-frame gait.
-  const liftLeft = pose === "walk" && frame === 1 ? -2.2 : 0
-  const liftRight = pose === "walk" && frame === 0 ? -2.2 : 0
-  const bob = pose === "walk" && frame === 1 ? -1.2 : 0
+  // Walking: the swinging leg BENDS — shorter thigh, foot barely off the
+  // floor — instead of the whole leg floating up, which left daylight
+  // under the shoe. One leg bends per frame; the body bobs on the
+  // off-beat — the app's two-frame gait.
+  const bendLeft = pose === "walk" && frame === 1
+  const bendRight = pose === "walk" && frame === 0
+  const bob = pose === "walk" && frame === 1 ? -1 : 0
+
+  const leg = (x: number, tone: number, bent: boolean) => (
+    <>
+      <rect
+        x={x}
+        y="-12.5"
+        width="9"
+        height={bent ? 8 : 10}
+        fill={shade(pants, tone)}
+      />
+      <rect
+        x={x - 1}
+        y={bent ? -5.5 : -3.5}
+        width="10.5"
+        height="3.5"
+        fill={shade(pants, 0.55)}
+      />
+    </>
+  )
 
   return (
     <g>
       <ellipse cx="0" cy="0" rx="13" ry="4" fill={P.shadow} />
 
-      <g transform={`translate(0,${liftLeft})`}>
-        <rect x="-9.5" y="-12.5" width="9" height="10" fill={pants} />
-        <rect x="-10.5" y="-3.5" width="10.5" height="3.5" fill={shade(pants, 0.55)} />
-      </g>
-      <g transform={`translate(0,${liftRight})`}>
-        <rect x="0.5" y="-12.5" width="9" height="10" fill={shade(pants, 0.88)} />
-        <rect x="0.5" y="-3.5" width="10.5" height="3.5" fill={shade(pants, 0.55)} />
-      </g>
+      {leg(-9.5, 1, bendLeft)}
+      {leg(0.5, 0.88, bendRight)}
 
       <g transform={`translate(0,${bob})`}>
         {/* torso, right face in shade */}
