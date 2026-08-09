@@ -13,6 +13,15 @@ import SwiftUI
 /// animated: the 2D canvas and the 3D layer must land on the same frame
 /// at the same instant, and a snap is exactly what a pixel app does.
 ///
+/// Named spots in the office. Walking into one does something: a
+/// colleague's pod opens its card, everywhere else shows a tip bubble.
+private enum Place: Equatable {
+    case station(Int)
+    case yourDesk
+    case lounge
+    case pingPong
+}
+
 /// Clicking an agent (or its desk) selects it — the detail card that
 /// opens on the right belongs to `ContentView`; the room only owns the
 /// selection value. Clicking the floor clears it, like in Gather.
@@ -42,8 +51,18 @@ struct RoomView: View {
     @State private var pressedArrows: Set<UInt16> = []
     /// The 60 Hz walk loop; alive exactly while a key is held.
     @State private var walkLoop: Task<Void, Never>?
+    /// The auto-walk home ("Back to your desk" button). Any arrow key
+    /// cancels it — you take the wheel back.
+    @State private var returnTask: Task<Void, Never>?
     /// The NSEvent monitor that feeds the arrow keys. Stored to remove it.
     @State private var keyMonitor: Any?
+
+    // ── Places (proximity interactions) ─────────────────────────────────
+    /// Where your avatar currently stands, zone-wise (see `Place` below).
+    @State private var currentPlace: Place?
+    /// A card opened by walking up to a colleague — closed again when you
+    /// walk away. A card the user opened by hand is left alone.
+    @State private var proximitySelectedID: Int?
 
     private static let zoomRange: ClosedRange<CGFloat> = 1...3
     /// The 3D layer needs an id for you; sessions start at 1, so -1 is safe.
@@ -68,13 +87,31 @@ struct RoomView: View {
                 }
                 .background(palette.floorB)
                 .overlay(alignment: .bottomTrailing) {
-                    ZoomControls(zoom: $zoom, range: Self.zoomRange)
-                        .padding(10)
+                    HStack(spacing: 8) {
+                        if youFeet != RoomPlan.youSeat {
+                            BackToDeskButton(action: startReturnToDesk)
+                                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                        }
+                        ZoomControls(zoom: $zoom, range: Self.zoomRange)
+                    }
+                    .padding(10)
+                    .animation(.easeOut(duration: 0.2),
+                               value: youFeet == RoomPlan.youSeat)
+                }
+                // Walking into a place shows its tip, bottom center —
+                // except a colleague's pod, which opens the card instead.
+                .overlay(alignment: .bottom) {
+                    if let place = tipPlace {
+                        TipBubble(place: place)
+                            .padding(.bottom, 14)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
                 // Zoomed in, the camera follows your avatar — walk to the
                 // far side of the office and the office comes with you.
                 .onChange(of: youFeet) {
                     followAvatar(proxy)
+                    updatePlace()
                 }
                 .onChange(of: zoom) {
                     followAvatar(proxy)
@@ -87,6 +124,8 @@ struct RoomView: View {
             keyMonitor = nil
             walkLoop?.cancel()
             walkLoop = nil
+            returnTask?.cancel()
+            returnTask = nil
         }
         // If the app loses focus mid-walk the keyUp never reaches us —
         // clear the keys so nobody walks into a wall forever.
@@ -104,6 +143,60 @@ struct RoomView: View {
     private func followAvatar(_ proxy: ScrollViewProxy) {
         guard zoom > 1 else { return }
         proxy.scrollTo(Self.youAnchorID, anchor: .center)
+    }
+
+    // ── Proximity ───────────────────────────────────────────────────────
+
+    /// The tip bubble shows for furniture places, and never while you're
+    /// still in your chair — the launch state must stay silent.
+    private var tipPlace: Place? {
+        guard let currentPlace, youPose != .seated else { return nil }
+        if case .station = currentPlace { return nil }
+        return currentPlace
+    }
+
+    /// Zone hit-testing, slightly inflated so "next to" counts as "at".
+    private func place(at feet: CGPoint) -> Place? {
+        let count = office.workstations.count
+        for index in 0..<count {
+            let carpet = RoomPlan.pod(index: index, of: count).carpet
+            if carpet.insetBy(dx: -4, dy: -4).contains(feet) {
+                return .station(index)
+            }
+        }
+        if RoomPlan.youZone.contains(feet) { return .yourDesk }
+        if RoomPlan.Furniture.loungeZone.insetBy(dx: -4, dy: -4).contains(feet) {
+            return .lounge
+        }
+        if RoomPlan.Furniture.pingPong.insetBy(dx: -8, dy: -8).contains(feet) {
+            return .pingPong
+        }
+        return nil
+    }
+
+    /// Called on every step. Entering a colleague's pod opens its card —
+    /// the office version of walking up to someone in Gather; leaving
+    /// closes it again (only if the visit opened it). Everywhere else,
+    /// the tip bubble follows from `tipPlace`.
+    private func updatePlace() {
+        let newPlace = place(at: youFeet)
+        guard newPlace != currentPlace else { return }
+
+        if let id = proximitySelectedID {
+            if selection == id { selection = nil }
+            proximitySelectedID = nil
+        }
+
+        withAnimation(.easeOut(duration: 0.25)) {
+            currentPlace = newPlace
+        }
+
+        if case .station(let index) = newPlace,
+           let sessionID = office.sessions
+               .first(where: { $0.stationIndex == index })?.id {
+            selection = sessionID
+            proximitySelectedID = sessionID
+        }
     }
 
     /// Everything inside the scroll content, at one moment's transform.
@@ -207,8 +300,7 @@ struct RoomView: View {
                 feet: feet(of: session, stationCount: stationCount),
                 pose: pose(of: session),
                 moveDuration: session.phase == .walking || session.phase == .walkingBack
-                    ? Choreo.walk : Choreo.standUp,
-                linearMove: false
+                    ? Choreo.walk : Choreo.standUp
             )
         }
         list.append(VoxelFigure(
@@ -219,8 +311,7 @@ struct RoomView: View {
             // layer to set positions directly. The final sit-back-down
             // snap (not walking) gets a small glide instead.
             pose: youPose,
-            moveDuration: youWalking ? 0 : 0.18,
-            linearMove: true
+            moveDuration: youWalking ? 0 : 0.18
         ))
         return list
     }
@@ -284,6 +375,9 @@ struct RoomView: View {
                 // Auto-repeats are consumed but ignored: the walk loop is
                 // the clock, the keyboard only says which keys are held.
                 if !event.isARepeat {
+                    // Touching the arrows takes over from the auto-walk.
+                    returnTask?.cancel()
+                    returnTask = nil
                     pressedArrows.insert(event.keyCode)
                     startWalkLoopIfNeeded()
                 }
@@ -347,6 +441,127 @@ struct RoomView: View {
                        RoomPlan.wallHeight + 8),
                    RoomPlan.size.height - 4)
         )
+    }
+
+    /// The "Back to your desk" button: walks you home at walking speed —
+    /// the same loop as the arrows, just steering itself. Ends seated.
+    private func startReturnToDesk() {
+        pressedArrows.removeAll()
+        returnTask?.cancel()
+        youWalking = true
+        returnTask = Task { @MainActor in
+            var lastTick = ContinuousClock.now
+            let speed: CGFloat = 62
+            while !Task.isCancelled, pressedArrows.isEmpty {
+                try? await Task.sleep(for: .milliseconds(16))
+                let now = ContinuousClock.now
+                let elapsed = lastTick.duration(to: now)
+                lastTick = now
+                let dt = min(
+                    Double(elapsed.components.seconds)
+                        + Double(elapsed.components.attoseconds) * 1e-18,
+                    0.05
+                )
+                let dx = RoomPlan.youSeat.x - youFeet.x
+                let dy = RoomPlan.youSeat.y - youFeet.y
+                let distance = (dx * dx + dy * dy).squareRoot()
+                let stride = speed * CGFloat(dt)
+                if distance <= stride {
+                    youFeet = RoomPlan.youSeat
+                    break
+                }
+                youFeet = CGPoint(x: youFeet.x + dx / distance * stride,
+                                  y: youFeet.y + dy / distance * stride)
+            }
+            returnTask = nil
+            if pressedArrows.isEmpty { youWalking = false }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Proximity extras: the walk-home button and the place tips.
+// ─────────────────────────────────────────────────────────────────────────
+
+/// Lives next to the zoom capsule whenever you're away from your chair.
+private struct BackToDeskButton: View {
+
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Image(systemName: "figure.walk")
+                    .font(.caption.weight(.semibold))
+                Text("Back to your desk")
+                    .font(.caption.weight(.medium))
+            }
+            .padding(.vertical, 7)
+            .padding(.horizontal, 12)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .background(.regularMaterial, in: Capsule())
+        .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
+    }
+}
+
+/// The little bottom-center card that greets you in each corner of the
+/// office — one flavor line, one real tip. Gather teaches by wandering;
+/// so does Roster.
+private struct TipBubble: View {
+
+    let place: Place
+
+    private var icon: String {
+        switch place {
+        case .lounge: return "sofa.fill"
+        case .pingPong: return "figure.table.tennis"
+        case .yourDesk, .station: return "desktopcomputer"
+        }
+    }
+
+    private var title: LocalizedStringKey {
+        switch place {
+        case .lounge: return "The lounge"
+        case .pingPong: return "The ping-pong table"
+        case .yourDesk, .station: return "Your desk"
+        }
+    }
+
+    private var message: LocalizedStringKey {
+        switch place {
+        case .lounge:
+            return "Agents never take a break — you're allowed to. Tip: ⌥⌘T keeps the room floating on top while you work."
+        case .pingPong:
+            return "Always free: the agents forfeit by default. Tip: hold two arrow keys to walk diagonally."
+        case .yourDesk, .station:
+            return "Finished agents queue up right here until you review them. Tip: clicking the floor closes any open card."
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.body.weight(.medium))
+                .foregroundStyle(.tint)
+                .frame(width: 26, height: 26)
+                .background(.tint.opacity(0.12), in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: 400)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
+        .allowsHitTesting(false)
     }
 }
 
@@ -599,11 +814,13 @@ private struct AgentOverlay: View {
     let onTap: () -> Void
 
     private var transition: Animation {
+        // Linear on purpose: the 3D bodies walk at constant speed, and
+        // the pill must ride exactly on top of the head.
         switch session.phase {
         case .walking, .walkingBack:
-            return .easeInOut(duration: Choreo.walk)
+            return .linear(duration: Choreo.walk)
         default:
-            return .easeInOut(duration: Choreo.standUp)
+            return .linear(duration: Choreo.standUp)
         }
     }
 

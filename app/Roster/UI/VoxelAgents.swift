@@ -32,12 +32,10 @@ struct VoxelFigure: Equatable, Identifiable {
     /// Feet position in LOGICAL room coordinates (see RoomPlan).
     let feet: CGPoint
     let pose: VoxelPose
-    /// How long a change of `feet` takes on screen. The walk is 2.9 s,
-    /// standing up 0.45 s, an arrow-key step ~0.13 s.
+    /// How long a change of `feet` should take on screen. The walk is
+    /// 2.9 s, standing up 0.45 s. Zero (or less) means "set directly" —
+    /// your avatar's 60 Hz steps use that.
     let moveDuration: Double
-    /// Arrow-key steps chain into each other, so they must be linear —
-    /// an ease-in-out per step would stutter.
-    let linearMove: Bool
 }
 
 // MARK: - The scene view
@@ -51,7 +49,15 @@ final class ClickThroughSCNView: SCNView {
 /// The bridge between SwiftUI and SceneKit. `updateNSView` runs on every
 /// relevant change (a session moved, the zoom changed, a desk appeared)
 /// and reconciles the scene graph: new figures fade in, gone ones fade
-/// out, moved ones run a move action matching the room's choreography.
+/// out, moved ones get a ROUTE.
+///
+/// Everybody moves the same way — the way your avatar does: a 60 Hz
+/// mover loop advances each en-route figure toward its target at
+/// constant speed (distance ÷ choreography duration), updating positions
+/// directly. People walk at a steady pace; easing curves are for
+/// furniture. Positions are kept in LOGICAL coordinates, so a zoom or a
+/// resize mid-walk just remaps the current spot instead of teleporting
+/// anyone to their destination.
 struct VoxelSceneView: NSViewRepresentable {
 
     var figures: [VoxelFigure]
@@ -96,8 +102,6 @@ struct VoxelSceneView: NSViewRepresentable {
             cameraNode.camera?.orthographicScale = Double(contentSize.height / 2)
         }
 
-        // When the transform itself changed (zoom, resize), every node
-        // snaps to its new spot — animating would smear the whole room.
         let geometryChanged = scale != c.scale || offset != c.offset || contentSize != c.contentSize
         c.scale = scale
         c.offset = offset
@@ -106,7 +110,6 @@ struct VoxelSceneView: NSViewRepresentable {
         var seen = Set<Int>()
         for figure in figures {
             seen.insert(figure.id)
-            let target = position(forFeet: figure.feet)
             let isNew = c.nodes[figure.id] == nil
             let node = c.nodes[figure.id] ?? {
                 let fresh = VoxelBuilder.character(look: figure.look)
@@ -118,35 +121,34 @@ struct VoxelSceneView: NSViewRepresentable {
             }()
             node.scale = SCNVector3(scale, scale, scale)
 
-            if isNew || geometryChanged {
-                node.removeAction(forKey: "move")
-                node.position = target
-            } else if let previous = c.feet[figure.id], previous != figure.feet {
+            let current = c.positions[figure.id] ?? figure.feet
+            if isNew {
+                c.positions[figure.id] = figure.feet
+                node.position = c.scenePosition(forFeet: figure.feet)
+            } else if geometryChanged {
+                // The transform moved, not the person: remap wherever the
+                // figure currently is — mid-walk included.
+                node.position = c.scenePosition(forFeet: current)
+            }
+
+            // A new destination becomes a route; the mover loop walks it
+            // at constant speed. Your avatar's 60 Hz steps (duration 0)
+            // are applied directly — they ARE the mover, upstream.
+            let knownTarget = c.routes[figure.id]?.target ?? current
+            if figure.feet != knownTarget {
+                turnTowards(figure.feet, from: current, id: figure.id, node: node, c: c)
                 if figure.moveDuration <= 0 {
-                    // Arrow-key steps arrive ~60 times a second: setting
-                    // the position directly is what smooth looks like —
-                    // piling up sixty tiny actions a second is what
-                    // stutter looks like.
-                    node.removeAction(forKey: "move")
-                    node.position = target
+                    c.routes[figure.id] = nil
+                    c.positions[figure.id] = figure.feet
+                    node.position = c.scenePosition(forFeet: figure.feet)
                 } else {
-                    let move = SCNAction.move(to: target, duration: figure.moveDuration)
-                    move.timingMode = figure.linearMove ? .linear : .easeInEaseOut
-                    node.removeAction(forKey: "move")
-                    node.runAction(move, forKey: "move")
-                }
-                // Turn toward the direction of travel — walking away shows
-                // the back of the head. This is the 3D doing the talking.
-                // Only when the heading actually CHANGES: re-issuing the
-                // same turn sixty times a second would fight itself.
-                let dx = figure.feet.x - previous.x
-                let dy = figure.feet.y - previous.y
-                if abs(dx) + abs(dy) > 0.1 {
-                    let yaw = (atan2(dx, dy) * 50).rounded() / 50
-                    if c.yaws[figure.id] != yaw {
-                        c.yaws[figure.id] = yaw
-                        VoxelBuilder.turn(node, yaw: yaw)
-                    }
+                    let distance = hypot(figure.feet.x - current.x,
+                                         figure.feet.y - current.y)
+                    c.routes[figure.id] = (
+                        target: figure.feet,
+                        speed: max(8, distance / figure.moveDuration)
+                    )
+                    c.startMoverIfNeeded()
                 }
             }
 
@@ -157,7 +159,6 @@ struct VoxelSceneView: NSViewRepresentable {
                     c.yaws[figure.id] = VoxelBuilder.restingYaw
                 }
             }
-            c.feet[figure.id] = figure.feet
             c.poses[figure.id] = figure.pose
         }
 
@@ -166,26 +167,42 @@ struct VoxelSceneView: NSViewRepresentable {
         for (id, node) in c.nodes where !seen.contains(id) {
             node.runAction(.sequence([.fadeOut(duration: 0.3), .removeFromParentNode()]))
             c.nodes[id] = nil
-            c.feet[id] = nil
+            c.positions[id] = nil
+            c.routes[id] = nil
             c.poses[id] = nil
             c.yaws[id] = nil
         }
     }
 
-    /// Logical feet → scene position. SceneKit's Y grows upward while the
-    /// view's grows downward, hence the flip. Z spreads characters in
-    /// depth so someone lower in the room renders in front.
-    private func position(forFeet feet: CGPoint) -> SCNVector3 {
-        SCNVector3(
-            offset.x + feet.x * scale,
-            contentSize.height - (offset.y + feet.y * scale),
-            feet.y * 0.1 * scale
-        )
+    /// Turn toward the direction of travel — walking away shows the back
+    /// of the head. Only when the heading actually changes: re-issuing
+    /// the same turn sixty times a second would fight itself.
+    private func turnTowards(
+        _ target: CGPoint, from current: CGPoint,
+        id: Int, node: SCNNode, c: Coordinator
+    ) {
+        let dx = target.x - current.x
+        let dy = target.y - current.y
+        guard abs(dx) + abs(dy) > 0.1 else { return }
+        let yaw = (atan2(dx, dy) * 50).rounded() / 50
+        if c.yaws[id] != yaw {
+            c.yaws[id] = yaw
+            VoxelBuilder.turn(node, yaw: yaw)
+        }
     }
 
+    static func dismantleNSView(_ nsView: SCNView, coordinator: Coordinator) {
+        coordinator.mover?.cancel()
+    }
+
+    @MainActor
     final class Coordinator {
         var nodes: [Int: SCNNode] = [:]
-        var feet: [Int: CGPoint] = [:]
+        /// Where each figure IS right now, in logical coordinates. The
+        /// single source of truth for on-screen placement.
+        var positions: [Int: CGPoint] = [:]
+        /// Where each figure is heading, and how fast (logical px/s).
+        var routes: [Int: (target: CGPoint, speed: CGFloat)] = [:]
         var poses: [Int: VoxelPose] = [:]
         /// Last heading applied per figure, so a steady walk issues one
         /// turn, not one per frame.
@@ -193,6 +210,63 @@ struct VoxelSceneView: NSViewRepresentable {
         var scale: CGFloat = 0
         var offset: CGPoint = .zero
         var contentSize: CGSize = .zero
+        /// The 60 Hz mover; alive exactly while someone is en route.
+        var mover: Task<Void, Never>?
+
+        /// Logical feet → scene position. SceneKit's Y grows upward while
+        /// the view's grows downward, hence the flip. Z spreads characters
+        /// in depth so someone lower in the room renders in front.
+        func scenePosition(forFeet feet: CGPoint) -> SCNVector3 {
+            SCNVector3(
+                offset.x + feet.x * scale,
+                contentSize.height - (offset.y + feet.y * scale),
+                feet.y * 0.1 * scale
+            )
+        }
+
+        func startMoverIfNeeded() {
+            guard mover == nil else { return }
+            mover = Task { @MainActor [weak self] in
+                var lastTick = ContinuousClock.now
+                while !Task.isCancelled {
+                    guard let self, !self.routes.isEmpty else { break }
+                    try? await Task.sleep(for: .milliseconds(16))
+                    let now = ContinuousClock.now
+                    let elapsed = lastTick.duration(to: now)
+                    lastTick = now
+                    let dt = min(
+                        Double(elapsed.components.seconds)
+                            + Double(elapsed.components.attoseconds) * 1e-18,
+                        0.05
+                    )
+                    self.tick(dt: CGFloat(dt))
+                }
+                self?.mover = nil
+            }
+        }
+
+        /// One tick: every en-route figure takes a constant-speed step.
+        private func tick(dt: CGFloat) {
+            for (id, route) in routes {
+                guard var position = positions[id], let node = nodes[id] else {
+                    routes[id] = nil
+                    continue
+                }
+                let dx = route.target.x - position.x
+                let dy = route.target.y - position.y
+                let distance = (dx * dx + dy * dy).squareRoot()
+                let step = route.speed * dt
+                if distance <= step {
+                    position = route.target
+                    routes[id] = nil
+                } else {
+                    position.x += dx / distance * step
+                    position.y += dy / distance * step
+                }
+                positions[id] = position
+                node.position = scenePosition(forFeet: position)
+            }
+        }
     }
 }
 

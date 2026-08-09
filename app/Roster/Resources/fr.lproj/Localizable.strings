@@ -79,6 +79,15 @@
 "Zoom in" = "Zoomer";
 "Zoom out" = "Dézoomer";
 "Reset zoom" = "Réinitialiser le zoom";
+"Back to your desk" = "Retour à ton bureau";
+
+/* ── Place tips ── */
+"The lounge" = "Le salon";
+"The ping-pong table" = "La table de ping-pong";
+"Your desk" = "Ton bureau";
+"Agents never take a break — you're allowed to. Tip: ⌥⌘T keeps the room floating on top while you work." = "Les agents ne font jamais de pause — toi, tu as le droit. Astuce : ⌥⌘T garde la pièce au premier plan pendant que tu travailles.";
+"Always free: the agents forfeit by default. Tip: hold two arrow keys to walk diagonally." = "Toujours libre : les agents déclarent forfait d'office. Astuce : maintiens deux flèches pour marcher en diagonale.";
+"Finished agents queue up right here until you review them. Tip: clicking the floor closes any open card." = "Les agents terminés font la queue ici jusqu'à ta review. Astuce : cliquer le sol ferme la carte ouverte.";
 
 /* ── Notification ── */
 "Finished — waiting at your desk." = "Terminé — il t'attend à ton bureau.";
