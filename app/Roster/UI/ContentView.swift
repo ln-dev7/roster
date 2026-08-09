@@ -56,23 +56,26 @@ struct ContentView: View {
                         EmptyView()
                     }
 
-                    // The room, with the Gather-style detail card floating
-                    // over its right edge when an agent is selected.
-                    ZStack(alignment: .topTrailing) {
+                    // The room, with the Gather-style detail card BESIDE
+                    // it. The card pushes the room instead of covering it —
+                    // the room rescales to the remaining width, so the desk
+                    // you just walked up to is never hidden behind its own
+                    // card. Not animated: the 3D layer repositions
+                    // instantly on layout changes, so the 2D room does too
+                    // (same rule as the zoom and the sidebar).
+                    HStack(alignment: .top, spacing: 0) {
                         RoomView(office: office, selection: $selectedSessionID)
+                            .overlay(alignment: .bottomLeading) {
+                                SidebarToggle(showSidebar: $showSidebar)
+                                    .padding(10)
+                            }
 
                         if let id = selectedSessionID, let session = office.session(id) {
                             DetailCard(office: office, session: session) {
                                 selectedSessionID = nil
                             }
                             .padding(12)
-                            .transition(.move(edge: .trailing).combined(with: .opacity))
                         }
-                    }
-                    .animation(.easeOut(duration: 0.22), value: selectedSessionID)
-                    .overlay(alignment: .bottomLeading) {
-                        SidebarToggle(showSidebar: $showSidebar)
-                            .padding(10)
                     }
 
                     if isPanelVisible {
