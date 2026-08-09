@@ -44,6 +44,10 @@ struct PixelPalette {
     let pingLine: Color
     let pingDark: Color
     let shadow: Color
+    /// The world beyond the office walls — visible because the camera
+    /// stays locked on you even at the map's edge (Gather shows water
+    /// there; Roster shows this).
+    let outside: Color
 
     static let day = PixelPalette(
         floorA: Color(hex: 0xEBDCC0), floorB: Color(hex: 0xE4D3B2), floorLine: Color(hex: 0xDCCBA6),
@@ -60,7 +64,8 @@ struct PixelPalette {
         plant: Color(hex: 0x63A85C), plantDark: Color(hex: 0x417F42),
         pot: Color(hex: 0xB06B41), potDark: Color(hex: 0x8E5330),
         pingTop: Color(hex: 0x45A06F), pingLine: Color(hex: 0xF2F0E8), pingDark: Color(hex: 0x357D56),
-        shadow: Color(red: 0.24, green: 0.18, blue: 0.10, opacity: 0.18)
+        shadow: Color(red: 0.24, green: 0.18, blue: 0.10, opacity: 0.18),
+        outside: Color(hex: 0x7DA49B)
     )
 
     static let night = PixelPalette(
@@ -78,7 +83,8 @@ struct PixelPalette {
         plant: Color(hex: 0x4A7E45), plantDark: Color(hex: 0x35652F),
         pot: Color(hex: 0x7E4C2E), potDark: Color(hex: 0x653C24),
         pingTop: Color(hex: 0x337753), pingLine: Color(hex: 0xC8C6BE), pingDark: Color(hex: 0x275D40),
-        shadow: Color(red: 0, green: 0, blue: 0, opacity: 0.30)
+        shadow: Color(red: 0, green: 0, blue: 0, opacity: 0.30),
+        outside: Color(hex: 0x20302C)
     )
 
     static func current(for scheme: ColorScheme) -> PixelPalette {

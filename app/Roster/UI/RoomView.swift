@@ -7,11 +7,13 @@ import SwiftUI
 /// SceneKit overlay, and regular SwiftUI on top: name pills, tap targets,
 /// the selection ring.
 ///
-/// The whole scene lives inside a two-axis `ScrollView`. At ×1 the room
-/// fits the window exactly; the zoom buttons grow the content so a
-/// crowded room can be inspected up close. Zooming is deliberately NOT
-/// animated: the 2D canvas and the 3D layer must land on the same frame
-/// at the same instant, and a snap is exactly what a pixel app does.
+/// The scene hangs on a GATHER CAMERA: the map is drawn bigger than the
+/// window and positioned so your avatar sits at the exact center of the
+/// viewport — you walk, the map slides, you never move on screen. Beyond
+/// the walls the "outside" backdrop shows, so the lock holds even at the
+/// edges. Zooming is deliberately NOT animated: the 2D canvas and the 3D
+/// layer must land on the same frame at the same instant, and a snap is
+/// exactly what a pixel app does.
 ///
 /// Named spots in the office. Walking into one does something: a
 /// colleague's pod opens its card, the fun corners show a tip bubble.
@@ -28,8 +30,7 @@ private enum Place: Equatable {
 ///
 /// The arrow keys move YOUR character — a real little game loop: held
 /// keys feed a direction, a 60 Hz task advances the feet, diagonals
-/// included. When the room is zoomed in, the scroll follows you around.
-/// Stop moving near your chair and you sit back down.
+/// included. Stop moving near your chair and you sit back down.
 struct RoomView: View {
 
     let office: Office
@@ -64,82 +65,65 @@ struct RoomView: View {
     /// walk away. A card the user opened by hand is left alone.
     @State private var proximitySelectedID: Int?
 
-    /// 100% = the whole office fits the window (the original behavior —
-    /// the floating card may cover a desk then, and that's accepted:
-    /// selecting pans the plan when zoomed, and one step of yours brings
-    /// anything back into view).
-    private static let zoomRange: ClosedRange<CGFloat> = 1...3
+    /// The Gather camera: the map is drawn BIG (1.6 × fit at 100 %) and
+    /// YOU are pinned to the exact center of the viewport — the map moves
+    /// under your feet, you never move on screen. There is no clamping at
+    /// the walls: near an edge the "outside" backdrop shows instead, so
+    /// the center-lock never breaks. Verified against Gather's behavior.
+    private static let basePlan: CGFloat = 1.6
+    /// Relative to the big plan; ~0.6 shows the whole office at once.
+    private static let zoomRange: ClosedRange<CGFloat> = 0.6...3
     /// The 3D layer needs an id for you; sessions start at 1, so -1 is safe.
     private static let youFigureID = -1
-    /// The scroll anchor that rides on your feet (camera follow).
-    private static let youAnchorID = "you-anchor"
 
     var body: some View {
         let palette = PixelPalette.current(for: colorScheme)
 
         GeometryReader { geo in
             let fit = RoomPlan.transform(in: geo.size).scale
-            let scale = fit * zoom
+            let scale = fit * Self.basePlan * zoom
             let content = CGSize(
-                width: max(geo.size.width, RoomPlan.size.width * scale),
-                height: max(geo.size.height, RoomPlan.size.height * scale)
-            )
-            let offset = CGPoint(
-                x: (content.width - RoomPlan.size.width * scale) / 2,
-                y: (content.height - RoomPlan.size.height * scale) / 2
+                width: RoomPlan.size.width * scale,
+                height: RoomPlan.size.height * scale
             )
 
-            ScrollViewReader { proxy in
-                ScrollView([.horizontal, .vertical]) {
-                    room(scale: scale, offset: offset,
-                         contentSize: content, palette: palette)
-                        .frame(width: content.width, height: content.height)
-                }
-                // Open on the middle of the office, not its top-left tile.
-                .defaultScrollAnchor(.center)
-                .background(palette.floorB)
-                .overlay(alignment: .bottomTrailing) {
-                    HStack(spacing: 8) {
-                        if youFeet != RoomPlan.youSeat {
-                            BackToDeskButton {
-                                startAutoWalk(to: RoomPlan.youSeat)
-                            }
-                            .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                        }
-                        ZoomControls(zoom: $zoom, range: Self.zoomRange)
+            room(scale: scale, offset: .zero,
+                 contentSize: content, palette: palette)
+                .frame(width: content.width, height: content.height)
+                // The whole camera in two lines: place the map so that
+                // your feet land on the viewport's center.
+                .position(
+                    x: geo.size.width / 2 + (content.width / 2 - youFeet.x * scale),
+                    y: geo.size.height / 2 + (content.height / 2 - youFeet.y * scale)
+                )
+        }
+        .background(palette.outside)
+        .clipped()
+        .overlay(alignment: .bottomTrailing) {
+            HStack(spacing: 8) {
+                if youFeet != RoomPlan.youSeat {
+                    BackToDeskButton {
+                        startAutoWalk(to: RoomPlan.youSeat)
                     }
-                    .padding(10)
-                    .animation(.easeOut(duration: 0.2),
-                               value: youFeet == RoomPlan.youSeat)
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
                 }
-                // Walking into a place shows its tip, bottom center —
-                // except a colleague's pod, which opens the card instead.
-                .overlay(alignment: .bottom) {
-                    if let place = tipPlace {
-                        TipBubble(place: place)
-                            .padding(.bottom, 14)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    }
-                }
-                // The camera follows your avatar — walk to the far side
-                // of the office and the office comes with you.
-                .onChange(of: youFeet) {
-                    followAvatar(proxy)
-                    updatePlace()
-                }
-                .onChange(of: zoom) {
-                    followAvatar(proxy)
-                }
-                // Selecting an agent (sidebar click included) pans the
-                // plan to its desk, slightly left of center so the
-                // floating card never sits on top of it.
-                .onChange(of: selection) {
-                    if let selection {
-                        proxy.scrollTo("agent-\(selection)",
-                                       anchor: UnitPoint(x: 0.38, y: 0.5))
-                    }
-                }
+                ZoomControls(zoom: $zoom, range: Self.zoomRange)
             }
+            .padding(10)
+            .animation(.easeOut(duration: 0.2),
+                       value: youFeet == RoomPlan.youSeat)
+        }
+        // Walking into a place shows its tip, bottom center — except a
+        // colleague's pod, which opens the card instead.
+        .overlay(alignment: .bottom) {
+            if let place = tipPlace {
+                TipBubble(place: place)
+                    .padding(.bottom, 14)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .onChange(of: youFeet) {
+            updatePlace()
         }
         .onAppear(perform: startListeningToArrowKeys)
         .onDisappear {
@@ -159,13 +143,6 @@ struct RoomView: View {
         ) { _ in
             pressedArrows.removeAll()
         }
-    }
-
-    /// Keeps your avatar centered. The plan is bigger than the window by
-    /// default, so this is simply how the room is looked at; when the
-    /// user zooms all the way out, scrollTo quietly has nothing to do.
-    private func followAvatar(_ proxy: ScrollViewProxy) {
-        proxy.scrollTo(Self.youAnchorID, anchor: .center)
     }
 
     // ── Proximity ───────────────────────────────────────────────────────
@@ -245,13 +222,6 @@ struct RoomView: View {
                 // Clicking the floor deselects — the card slides away.
                 .onTapGesture { selection = nil }
 
-            // The invisible anchor the camera-follow scrolls to.
-            Color.clear
-                .frame(width: 1, height: 1)
-                .position(map(youFeet))
-                .id(Self.youAnchorID)
-                .allowsHitTesting(false)
-
             // Invisible tap targets over each pod's carpet: clicking a
             // desk selects whoever works there. The agent targets above
             // win the hit-test when you aim at them directly.
@@ -329,7 +299,6 @@ struct RoomView: View {
             }
 
             // The agents' 2D halves: pill, tap target, selection ring.
-            // The id is the pan-to-selection scroll target.
             ForEach(office.sessions) { session in
                 AgentOverlay(
                     office: office,
@@ -341,7 +310,6 @@ struct RoomView: View {
                     onTap: { selection = session.id }
                 )
                 .transition(.opacity)
-                .id("agent-\(session.id)")
             }
         }
     }
