@@ -1,324 +1,242 @@
 import SwiftUI
 
-/// The room. A static blueprint drawn once in a `Canvas`, with live views
-/// (agents, walk paths, monitor lights) layered on top.
+/// The pixel office. A static scene painted once in a `Canvas` (floor,
+/// walls, pods, lounge), with live layers on top: breathing monitor
+/// glows, the agents with their name pills, and you at your desk.
 ///
-/// Why this split: the `Canvas` costs nothing while nothing changes — SwiftUI
-/// is retained-mode, so a calm room is a *free* room (the reason we chose
-/// SwiftUI over SpriteKit, whose render loop never sleeps). The few looping
-/// animations (monitor breathing, waiting ring) are opacity/scale tweens the
-/// system runs out-of-process; the app's CPU stays at zero between events.
+/// Still calm, still cheap: SwiftUI is retained-mode, so nothing costs a
+/// frame while nothing changes. The only per-frame work is the walk
+/// itself (position tween + a 7 fps step timer that pauses when nobody
+/// walks).
 struct RoomView: View {
 
     let office: Office
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        let theme = BlueprintTheme.current(for: colorScheme)
+        let palette = PixelPalette.current(for: colorScheme)
         let stationCount = office.workstations.count
 
         GeometryReader { geo in
-            // Uniform scale-to-fit of the 960×540 design canvas.
-            let scale = min(geo.size.width / RoomPlan.canvasSize.width,
-                            geo.size.height / RoomPlan.canvasSize.height)
+            let (scale, offset) = RoomPlan.transform(in: geo.size)
+            let map = { (p: CGPoint) in
+                CGPoint(x: offset.x + p.x * scale, y: offset.y + p.y * scale)
+            }
 
             ZStack {
-                BlueprintCanvas(theme: theme,
-                                stationNames: office.workstations.map(\.name))
-                MonitorLights(office: office, theme: theme)
+                PixelSceneCanvas(palette: palette, stationCount: stationCount)
 
-                // Paths under the dots, dots on top.
-                ForEach(office.sessions) { session in
-                    WalkPathView(
-                        session: session,
-                        station: RoomPlan.station(index: session.stationIndex, of: stationCount),
-                        theme: theme
-                    )
+                // Screens glow while someone works at the pod.
+                ForEach(office.workstations.indices, id: \.self) { index in
+                    if office.hasWorkingAgent(onStation: index) {
+                        let screen = RoomPlan.pod(index: index, of: stationCount).screen
+                        ScreenGlow(palette: palette)
+                            .frame(width: screen.width * scale, height: screen.height * scale)
+                            .position(map(CGPoint(x: screen.midX, y: screen.midY)))
+                    }
                 }
+                ScreenGlow(palette: palette)
+                    .frame(width: RoomPlan.youScreen.width * scale,
+                           height: RoomPlan.youScreen.height * scale)
+                    .position(map(CGPoint(x: RoomPlan.youScreen.midX, y: RoomPlan.youScreen.midY)))
+
+                // You, at your desk.
+                PixelCharacter(
+                    name: String(localized: "You"),
+                    look: .you,
+                    pose: .seated,
+                    pillColor: Color(hex: 0x8A8F98),
+                    scale: scale,
+                    shadow: palette.shadow,
+                    feet: map(RoomPlan.youSeat)
+                )
+
+                // The agents.
                 ForEach(office.sessions) { session in
-                    AgentDotView(
+                    PixelAgentView(
                         office: office,
                         session: session,
-                        station: RoomPlan.station(index: session.stationIndex, of: stationCount),
+                        pod: RoomPlan.pod(index: session.stationIndex, of: stationCount),
                         seatCount: office.seatCount(onStation: session.stationIndex),
-                        theme: theme
+                        scale: scale,
+                        palette: palette,
+                        map: map
                     )
-                    // Fade/scale on session start & end. Callers wrap the
-                    // structural mutations in `withAnimation` to trigger it.
                     .transition(.opacity.combined(with: .scale(scale: 0.4)))
                 }
             }
-            .frame(width: RoomPlan.canvasSize.width, height: RoomPlan.canvasSize.height)
-            .scaleEffect(scale)
-            .position(x: geo.size.width / 2, y: geo.size.height / 2)
         }
-        .background(theme.paper)
+        .background(palette.floorB)
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// The static drawing: walls, grid, door, desks, labels, your desk.
-// Redrawn only when the station list or the theme changes.
+// The static scene.
 // ─────────────────────────────────────────────────────────────────────────
 
-private struct BlueprintCanvas: View {
+private struct PixelSceneCanvas: View {
 
-    let theme: BlueprintTheme
-    let stationNames: [String]
+    let palette: PixelPalette
+    let stationCount: Int
 
     var body: some View {
-        Canvas { context, _ in
-            drawGrid(in: context)
-            drawFurniture(in: context)
-            drawWallsAndDoor(in: context)
-            drawWindows(in: context)
-            drawSheetAnnotations(in: context)
-            for (index, name) in stationNames.enumerated() {
-                let station = RoomPlan.station(index: index, of: stationNames.count)
-                draw(station: station, named: name, in: context)
+        Canvas { context, size in
+            let (scale, offset) = RoomPlan.transform(in: size)
+
+            func fill(_ rect: CGRect, _ color: Color) {
+                context.fill(
+                    Path(CGRect(x: offset.x + rect.minX * scale,
+                                y: offset.y + rect.minY * scale,
+                                width: rect.width * scale,
+                                height: rect.height * scale)),
+                    with: .color(color)
+                )
             }
-            drawMyDesk(in: context)
-        }
-    }
 
-    /// The drafting grid, clipped to the room.
-    private func drawGrid(in context: GraphicsContext) {
-        var grid = Path()
-        let wall = RoomPlan.wall
-        var x = wall.minX + RoomPlan.gridStep
-        while x < wall.maxX {
-            grid.move(to: CGPoint(x: x, y: wall.minY))
-            grid.addLine(to: CGPoint(x: x, y: wall.maxY))
-            x += RoomPlan.gridStep
-        }
-        var y = wall.minY + RoomPlan.gridStep
-        while y < wall.maxY {
-            grid.move(to: CGPoint(x: wall.minX, y: y))
-            grid.addLine(to: CGPoint(x: wall.maxX, y: y))
-            y += RoomPlan.gridStep
-        }
-        context.stroke(grid, with: .color(theme.inkFaint), lineWidth: 1)
-    }
-
-    /// The walls are one open path with a gap at the bottom-left: the door.
-    /// The door itself is a leaf line plus the dashed swing arc — drawn the
-    /// way an architect draws one.
-    private func drawWallsAndDoor(in context: GraphicsContext) {
-        let wall = RoomPlan.wall
-        let hinge = RoomPlan.doorHinge
-        let doorEnd = CGPoint(x: hinge.x + RoomPlan.doorWidth, y: wall.maxY)
-
-        var walls = Path()
-        walls.move(to: CGPoint(x: hinge.x, y: wall.maxY))
-        walls.addLine(to: CGPoint(x: wall.minX, y: wall.maxY))
-        walls.addLine(to: CGPoint(x: wall.minX, y: wall.minY))
-        walls.addLine(to: CGPoint(x: wall.maxX, y: wall.minY))
-        walls.addLine(to: CGPoint(x: wall.maxX, y: wall.maxY))
-        walls.addLine(to: doorEnd)
-        context.stroke(walls, with: .color(theme.ink), style: StrokeStyle(lineWidth: 1.6))
-
-        // Door leaf, opened into the room.
-        var leaf = Path()
-        leaf.move(to: hinge)
-        leaf.addLine(to: CGPoint(x: hinge.x, y: wall.maxY - RoomPlan.doorWidth))
-        context.stroke(leaf, with: .color(theme.ink), lineWidth: 1.2)
-
-        // Swing arc.
-        var swing = Path()
-        swing.addArc(center: hinge,
-                     radius: RoomPlan.doorWidth,
-                     startAngle: .degrees(270),
-                     endAngle: .degrees(0),
-                     clockwise: false)
-        context.stroke(swing, with: .color(theme.inkSoft),
-                       style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
-    }
-
-    /// Window symbols: a paper gap in the wall crossed by two parallel
-    /// lines, capped at both ends — the way an architect draws one.
-    private func drawWindows(in context: GraphicsContext) {
-        let wallY = RoomPlan.wall.minY
-        for window in RoomPlan.Furniture.windows {
-            let gap = CGRect(x: window.x, y: wallY - 4, width: window.width, height: 8)
-            context.fill(Path(gap), with: .color(theme.paper))
-
+            // ── Floor: a full-view wash, then the tile grid ─────────────
+            context.fill(Path(CGRect(origin: .zero, size: size)),
+                         with: .color(palette.floorB))
+            // Checker tiles, extended past the scene so letterboxing
+            // reads as more floor rather than as bars.
+            let tile = 16 * scale
+            var ty = offset.y.truncatingRemainder(dividingBy: 2 * tile) - 2 * tile
+            var rowIndex = 0
+            while ty < size.height {
+                var tx = offset.x.truncatingRemainder(dividingBy: 2 * tile) - 2 * tile
+                var colIndex = 0
+                while tx < size.width {
+                    if (rowIndex + colIndex) % 2 == 0 {
+                        context.fill(Path(CGRect(x: tx, y: ty, width: tile, height: tile)),
+                                     with: .color(palette.floorA))
+                    }
+                    tx += tile
+                    colIndex += 1
+                }
+                ty += tile
+                rowIndex += 1
+            }
+            // Grout lines.
             var lines = Path()
-            lines.move(to: CGPoint(x: window.x, y: wallY - 2))
-            lines.addLine(to: CGPoint(x: window.x + window.width, y: wallY - 2))
-            lines.move(to: CGPoint(x: window.x, y: wallY + 2))
-            lines.addLine(to: CGPoint(x: window.x + window.width, y: wallY + 2))
-            context.stroke(lines, with: .color(theme.ink), lineWidth: 1.1)
-
-            var caps = Path()
-            caps.move(to: CGPoint(x: window.x, y: wallY - 4))
-            caps.addLine(to: CGPoint(x: window.x, y: wallY + 4))
-            caps.move(to: CGPoint(x: window.x + window.width, y: wallY - 4))
-            caps.addLine(to: CGPoint(x: window.x + window.width, y: wallY + 4))
-            context.stroke(caps, with: .color(theme.ink), lineWidth: 1.2)
-        }
-    }
-
-    /// Everything that lives on the sheet rather than in the room: the
-    /// dimension line, the title block and the north arrow.
-    private func drawSheetAnnotations(in context: GraphicsContext) {
-        let wall = RoomPlan.wall
-        typealias F = RoomPlan.Furniture
-
-        // Dimension line, stopping before the cartouche.
-        let y = wall.maxY + 18
-        var dims = Path()
-        dims.move(to: CGPoint(x: wall.minX, y: y))
-        dims.addLine(to: CGPoint(x: F.dimensionMaxX, y: y))
-        dims.move(to: CGPoint(x: wall.minX, y: y - 5))
-        dims.addLine(to: CGPoint(x: wall.minX, y: y + 5))
-        dims.move(to: CGPoint(x: F.dimensionMaxX, y: y - 5))
-        dims.addLine(to: CGPoint(x: F.dimensionMaxX, y: y + 5))
-        context.stroke(dims, with: .color(theme.inkSoft), lineWidth: 1)
-
-        // Title block.
-        var cartouche = Path(F.cartouche)
-        for x in F.cartoucheDividerXs {
-            cartouche.move(to: CGPoint(x: x, y: F.cartouche.minY))
-            cartouche.addLine(to: CGPoint(x: x, y: F.cartouche.maxY))
-        }
-        context.stroke(cartouche, with: .color(theme.inkSoft), lineWidth: 1)
-        for label in F.cartoucheLabels {
-            var text = context.resolve(
-                Text(label.text)
-                    .font(.system(size: 8, design: .monospaced))
-                    .kerning(1.5)
-            )
-            text.shading = .color(theme.inkSoft)
-            context.draw(text, at: CGPoint(x: label.x, y: F.cartouche.midY), anchor: .center)
-        }
-
-        // North arrow.
-        let north = F.northArrowCenter
-        context.stroke(
-            Path(ellipseIn: CGRect(x: north.x - 9, y: north.y - 9, width: 18, height: 18)),
-            with: .color(theme.inkSoft), lineWidth: 1
-        )
-        var needle = Path()
-        needle.move(to: CGPoint(x: north.x, y: north.y + 5))
-        needle.addLine(to: CGPoint(x: north.x, y: north.y - 6))
-        needle.move(to: CGPoint(x: north.x - 3, y: north.y - 2))
-        needle.addLine(to: CGPoint(x: north.x, y: north.y - 6))
-        needle.addLine(to: CGPoint(x: north.x + 3, y: north.y - 2))
-        context.stroke(needle, with: .color(theme.ink), lineWidth: 1.2)
-        var n = context.resolve(
-            Text("N").font(.system(size: 8, design: .monospaced))
-        )
-        n.shading = .color(theme.inkSoft)
-        context.draw(n, at: CGPoint(x: north.x, y: north.y + 18), anchor: .center)
-    }
-
-    /// The only "furniture" left: plant bushes in the corners. Everything
-    /// heavier (sofas, tables) read as clutter — removed on purpose.
-    private func drawFurniture(in context: GraphicsContext) {
-        typealias F = RoomPlan.Furniture
-
-        // Plants: a dashed bush with five fronds.
-        for plant in F.plants {
-            let c = plant.center
-            let r = plant.radius
-            context.stroke(
-                Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)),
-                with: .color(theme.inkSoft),
-                style: StrokeStyle(lineWidth: 1.1, dash: [2, 3])
-            )
-            var fronds = Path()
-            let tips: [CGPoint] = [
-                CGPoint(x: 0, y: -r + 2), CGPoint(x: r - 4, y: -r / 2), CGPoint(x: -r + 4, y: -r / 2),
-                CGPoint(x: r / 2.5, y: r - 3), CGPoint(x: -r / 2.5, y: r - 3),
-            ]
-            for tip in tips {
-                fronds.move(to: c)
-                fronds.addLine(to: CGPoint(x: c.x + tip.x, y: c.y + tip.y))
+            var gx = offset.x.truncatingRemainder(dividingBy: tile)
+            while gx < size.width {
+                lines.move(to: CGPoint(x: gx, y: 0))
+                lines.addLine(to: CGPoint(x: gx, y: size.height))
+                gx += tile
             }
-            context.stroke(fronds, with: .color(theme.inkSoft), lineWidth: 1.1)
+            var gy = offset.y.truncatingRemainder(dividingBy: tile)
+            while gy < size.height {
+                lines.move(to: CGPoint(x: 0, y: gy))
+                lines.addLine(to: CGPoint(x: size.width, y: gy))
+                gy += tile
+            }
+            context.stroke(lines, with: .color(palette.floorLine), lineWidth: max(1, scale * 0.6))
+
+            // ── Wall band with windows, across the full width ───────────
+            context.fill(Path(CGRect(x: 0, y: 0, width: size.width,
+                                     height: offset.y + RoomPlan.wallHeight * scale)),
+                         with: .color(palette.wall))
+            context.fill(Path(CGRect(x: 0, y: 0, width: size.width, height: offset.y + 3 * scale)),
+                         with: .color(palette.wallTop))
+            fill(CGRect(x: -200, y: RoomPlan.wallHeight, width: RoomPlan.size.width + 400, height: 2),
+                 palette.shadow)
+            for wx in RoomPlan.Furniture.windowXs {
+                fill(CGRect(x: wx, y: 4, width: 26, height: 11), palette.windowFrame)
+                fill(CGRect(x: wx + 1, y: 5, width: 24, height: 9), palette.windowGlass)
+                fill(CGRect(x: wx + 1, y: 5, width: 24, height: 3), palette.windowLite)
+                fill(CGRect(x: wx + 12, y: 5, width: 2, height: 9), palette.windowFrame)
+            }
+
+            // ── Desk pods ───────────────────────────────────────────────
+            for index in 0..<stationCount {
+                let pod = RoomPlan.pod(index: index, of: stationCount)
+                carpet(pod.carpet, palette.carpet, palette.carpetDark, palette.carpetLine, fill)
+                desk(pod.desk, monitor: pod.monitorFrame, screen: pod.screen, fill)
+                // Chair.
+                fill(pod.chair, palette.chair)
+                fill(CGRect(x: pod.chair.minX, y: pod.chair.maxY - 4, width: pod.chair.width, height: 2), palette.chairDark)
+                plant(at: pod.plantPot, fill)
+            }
+
+            // ── Your corner ─────────────────────────────────────────────
+            carpet(RoomPlan.youZone, palette.rug, palette.rugDark, palette.rugLine, fill)
+            desk(RoomPlan.youDesk, monitor: RoomPlan.youMonitorFrame, screen: RoomPlan.youScreen, fill)
+            for pot in RoomPlan.youPlants { plant(at: pot, fill) }
+
+            // ── Lounge ──────────────────────────────────────────────────
+            carpet(RoomPlan.Furniture.loungeZone, palette.loungeCarpet,
+                   palette.loungeCarpetDark, palette.loungeCarpetLine, fill)
+            let sofa = RoomPlan.Furniture.sofa
+            fill(CGRect(x: sofa.minX + 2, y: sofa.maxY, width: sofa.width - 2, height: 3), palette.shadow)
+            fill(sofa, palette.sofa)
+            fill(CGRect(x: sofa.minX, y: sofa.minY, width: sofa.width, height: 3), palette.sofaLite)
+            fill(CGRect(x: sofa.minX, y: sofa.maxY - 3, width: sofa.width, height: 3), palette.sofaDark)
+            fill(CGRect(x: sofa.minX + 13, y: sofa.minY + 2, width: 1, height: 8), palette.sofaDark)
+            fill(CGRect(x: sofa.minX + 26, y: sofa.minY + 2, width: 1, height: 8), palette.sofaDark)
+            fill(CGRect(x: sofa.minX - 3, y: sofa.minY, width: 3, height: 12), palette.sofaDark)
+            fill(CGRect(x: sofa.maxX, y: sofa.minY, width: 3, height: 12), palette.sofaDark)
+            let table = RoomPlan.Furniture.lowTable
+            fill(CGRect(x: table.minX + 1, y: table.maxY, width: table.width - 2, height: 2), palette.shadow)
+            fill(table, palette.lowTable)
+            fill(CGRect(x: table.minX, y: table.maxY - 2, width: table.width, height: 2), palette.lowTableDark)
+            plant(at: RoomPlan.Furniture.loungePlant, fill)
+
+            // ── Ping-pong ───────────────────────────────────────────────
+            let ping = RoomPlan.Furniture.pingPong
+            fill(CGRect(x: ping.minX + 2, y: ping.maxY, width: ping.width - 2, height: 3), palette.shadow)
+            fill(ping, palette.pingTop)
+            fill(CGRect(x: ping.minX, y: ping.maxY - 3, width: ping.width, height: 3), palette.pingDark)
+            fill(CGRect(x: ping.midX - 1, y: ping.minY, width: 2, height: ping.height), palette.pingLine)
+            plant(at: RoomPlan.Furniture.pingPongPlant, fill)
         }
     }
 
-    private func draw(station: RoomPlan.Station, named name: String,
-                      in context: GraphicsContext) {
-        // Desk; monitor as an outline — its light is a live overlay.
-        context.stroke(Path(station.deskRect), with: .color(theme.ink),
-                       style: StrokeStyle(lineWidth: 1.4))
-        context.stroke(Path(station.monitorRect), with: .color(theme.inkSoft),
-                       style: StrokeStyle(lineWidth: 1))
+    // Small drawing helpers, all in logical rects via the shared `fill`.
 
-        // Chair.
-        let chair = CGRect(x: station.chairCenter.x - 10, y: station.chairCenter.y - 10,
-                           width: 20, height: 20)
-        context.stroke(Path(ellipseIn: chair), with: .color(theme.inkSoft),
-                       style: StrokeStyle(lineWidth: 1.2))
-
-        // Project name, lettered like a plan annotation.
-        var label = context.resolve(
-            Text(name.uppercased())
-                .font(.system(size: 10, design: .monospaced))
-                .kerning(2.5)
-        )
-        label.shading = .color(theme.inkSoft)
-        context.draw(label, at: station.labelPoint, anchor: .center)
+    private func carpet(_ zone: CGRect, _ main: Color, _ dark: Color, _ line: Color,
+                        _ fill: (CGRect, Color) -> Void) {
+        fill(zone, main)
+        fill(CGRect(x: zone.minX, y: zone.minY, width: zone.width, height: 2), line)
+        fill(CGRect(x: zone.minX, y: zone.maxY - 2, width: zone.width, height: 2), dark)
+        fill(CGRect(x: zone.minX, y: zone.minY, width: 2, height: zone.height), line)
+        fill(CGRect(x: zone.maxX - 2, y: zone.minY, width: 2, height: zone.height), dark)
     }
 
-    private func drawMyDesk(in context: GraphicsContext) {
-        context.stroke(Path(RoomPlan.myDesk), with: .color(theme.ink),
-                       style: StrokeStyle(lineWidth: 1.6))
-        context.stroke(Path(RoomPlan.myDeskInner), with: .color(theme.inkFaint),
-                       style: StrokeStyle(lineWidth: 1))
+    private func desk(_ rect: CGRect, monitor: CGRect, screen: CGRect,
+                      _ fill: (CGRect, Color) -> Void) {
+        fill(CGRect(x: rect.minX + 2, y: rect.maxY, width: rect.width - 4, height: 3), palette.shadow)
+        fill(rect, palette.desk)
+        fill(CGRect(x: rect.minX, y: rect.minY, width: rect.width, height: 2), palette.deskLite)
+        fill(CGRect(x: rect.minX, y: rect.maxY - 2, width: rect.width, height: 2), palette.deskDark)
+        fill(monitor, palette.monitor)
+        fill(screen, palette.screenOff)
+        fill(CGRect(x: monitor.midX - 1, y: monitor.maxY, width: 2, height: 2), palette.monitor)
+    }
 
-        let chair = CGRect(x: RoomPlan.myChairCenter.x - 11, y: RoomPlan.myChairCenter.y - 11,
-                           width: 22, height: 22)
-        context.stroke(Path(ellipseIn: chair), with: .color(theme.inkSoft),
-                       style: StrokeStyle(lineWidth: 1.4))
-
-        var label = context.resolve(
-            Text("LN")
-                .font(.system(size: 10, design: .monospaced))
-                .kerning(3)
-        )
-        label.shading = .color(theme.inkSoft)
-        context.draw(label, at: RoomPlan.myLabelPoint, anchor: .center)
+    private func plant(at pot: CGPoint, _ fill: (CGRect, Color) -> Void) {
+        fill(CGRect(x: pot.x, y: pot.y, width: 8, height: 6), palette.pot)
+        fill(CGRect(x: pot.x, y: pot.y + 4, width: 8, height: 2), palette.potDark)
+        fill(CGRect(x: pot.x + 1, y: pot.y - 6, width: 6, height: 6), palette.plant)
+        fill(CGRect(x: pot.x - 1, y: pot.y - 4, width: 3, height: 3), palette.plant)
+        fill(CGRect(x: pot.x + 6, y: pot.y - 4, width: 3, height: 3), palette.plant)
+        fill(CGRect(x: pot.x + 2, y: pot.y - 8, width: 4, height: 3), palette.plant)
+        fill(CGRect(x: pot.x + 3, y: pot.y - 5, width: 2, height: 4), palette.plantDark)
     }
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Monitor lights: the bar "breathes" while someone at the station works.
+// A screen that breathes while its agent works.
 // ─────────────────────────────────────────────────────────────────────────
 
-private struct MonitorLights: View {
+private struct ScreenGlow: View {
 
-    let office: Office
-    let theme: BlueprintTheme
-
-    var body: some View {
-        let count = office.workstations.count
-        ForEach(office.workstations.indices, id: \.self) { index in
-            if office.hasWorkingAgent(onStation: index) {
-                BreathingBar(rect: RoomPlan.station(index: index, of: count).monitorRect,
-                             theme: theme)
-            }
-        }
-    }
-}
-
-private struct BreathingBar: View {
-
-    let rect: CGRect
-    let theme: BlueprintTheme
+    let palette: PixelPalette
     @State private var bright = false
 
     var body: some View {
         Rectangle()
-            .fill(theme.ink)
-            .frame(width: rect.width, height: rect.height)
-            .position(x: rect.midX, y: rect.midY)
-            .opacity(bright ? 0.9 : 0.35)
+            .fill(palette.screenOn)
+            .opacity(bright ? 0.95 : 0.55)
             .onAppear {
-                // A slow tween the render server runs on its own — the app
-                // process does no per-frame work for this.
                 withAnimation(.easeInOut(duration: 1.9).repeatForever(autoreverses: true)) {
                     bright = true
                 }
@@ -327,86 +245,45 @@ private struct BreathingBar: View {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// The dashed walk path: draws itself ahead of the agent, retracts after.
+// One agent: sprite + name pill, moved by the same phase machinery as
+// ever. The pill's dot carries the status color used across the app.
 // ─────────────────────────────────────────────────────────────────────────
 
-private struct WalkPathView: View {
-
-    let session: AgentSession
-    let station: RoomPlan.Station
-    let theme: BlueprintTheme
-
-    /// On screen for the whole trip: from standing up (only when the stand
-    /// is the prelude to a walk, i.e. status is `finished`) to sitting back
-    /// down after the return leg.
-    private var isVisible: Bool {
-        if session.phase == .walkingBack { return true }
-        guard session.status == .finished else { return false }
-        switch session.phase {
-        case .standing, .walking, .atDesk: return true
-        default: return false
-        }
-    }
-
-    var body: some View {
-        LineShape(from: station.standPoint(slot: session.seatSlot),
-                  to: RoomPlan.arrival(deskSlot: session.deskSlot))
-            // trim + dash = the line draws itself point by point. A cheap
-            // effect that reads beautifully on a blueprint.
-            .trim(from: 0, to: isVisible ? 1 : 0)
-            .stroke(theme.inkSoft, style: StrokeStyle(lineWidth: 1.2, dash: [4, 5]))
-            .animation(.easeOut(duration: 0.6), value: isVisible)
-    }
-}
-
-/// A straight segment in design coordinates. (`Shape` because that is what
-/// `.trim` needs to operate on.)
-private struct LineShape: Shape {
-    let from: CGPoint
-    let to: CGPoint
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: from)
-        path.addLine(to: to)
-        return path
-    }
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// One agent: a dot of ink. Its position derives from its phase; its look
-// derives from its status. Shape carries state — no accent colors.
-// ─────────────────────────────────────────────────────────────────────────
-
-private struct AgentDotView: View {
+private struct PixelAgentView: View {
 
     let office: Office
     let session: AgentSession
-    let station: RoomPlan.Station
-    /// Occupants of this agent's station, for seat spreading.
+    let pod: RoomPlan.Pod
     let seatCount: Int
-    let theme: BlueprintTheme
+    let scale: CGFloat
+    let palette: PixelPalette
+    let map: (CGPoint) -> CGPoint
 
-    /// Clicking a dot opens its popover (summary + actions).
     @State private var showActions = false
 
-    private var position: CGPoint {
+    private var name: String {
+        office.workstations.indices.contains(session.stationIndex)
+            ? office.workstations[session.stationIndex].name
+            : "?"
+    }
+
+    private var feet: CGPoint {
         switch session.phase {
         case .seated:
-            return station.seatPoint(slot: session.seatSlot, of: seatCount)
+            return pod.seat(slot: session.seatSlot, of: seatCount)
         case .standing:
-            return station.standPoint(slot: session.seatSlot)
+            return pod.stand(slot: session.seatSlot)
         case .walking, .atDesk:
             return RoomPlan.arrival(deskSlot: session.deskSlot)
         case .walkingBack:
-            return station.standPoint(slot: session.seatSlot)
+            return pod.stand(slot: session.seatSlot)
         }
     }
 
-    /// Each transition picks its own curve: the walk is a long ease-in-out
-    /// (people accelerate then settle), getting up is a short one. The
-    /// `.animation(_:value:)` modifier below re-reads this every time the
-    /// phase changes, so the right duration applies to the right leg.
+    private var isWalking: Bool {
+        session.phase == .walking || session.phase == .walkingBack
+    }
+
     private var transition: Animation {
         switch session.phase {
         case .walking, .walkingBack:
@@ -417,88 +294,64 @@ private struct AgentDotView: View {
     }
 
     var body: some View {
-        ZStack {
-            // Halo when waiting at your desk.
-            Circle()
-                .fill(theme.glow)
-                .frame(width: 30, height: 30)
-                .opacity(session.phase == .atDesk ? 1 : 0)
-                .animation(.easeInOut(duration: 0.35), value: session.phase == .atDesk)
+        let mapped = map(feet)
+        let spriteHeight = PixelSprite.logicalSize.height * scale
+        let pillHeight: CGFloat = 20
 
-            // Pulsing ring while the agent waits on you. Inserted only in
-            // that state, so its animation starts fresh each time.
-            if session.status == .waitingForInput {
-                PulseRing(theme: theme)
+        VStack(spacing: 2) {
+            NamePill(name: name, color: session.status.uiColor)
+            // The step timer only ticks while this agent walks.
+            TimelineView(.animation(minimumInterval: 0.14, paused: !isWalking)) { timeline in
+                let frame = Int(timeline.date.timeIntervalSinceReferenceDate / 0.14) % 2
+                PixelSprite(
+                    look: SpriteLook.derive(from: name, slot: session.seatSlot),
+                    pose: pose(frame: frame),
+                    scale: scale,
+                    shadowColor: palette.shadow
+                )
             }
-
-            dot
         }
-        // A comfortable click target around the 14 pt dot.
-        .frame(width: 34, height: 34)
-        .contentShape(Circle())
+        .contentShape(Rectangle())
         .onTapGesture { showActions = true }
         .popover(isPresented: $showActions, arrowEdge: .bottom) {
             AgentPopover(office: office, session: session)
         }
-        .position(position)
-        // Movement animation, keyed on the phase…
+        // Feet-anchored: the container's center sits half its height above.
+        .position(x: mapped.x, y: mapped.y - (spriteHeight + pillHeight + 2) / 2)
         .animation(transition, value: session.phase)
-        // …plus a short slide when a colleague joins/leaves the station and
-        // the seat re-centers, or when the room re-spreads its desks.
         .animation(.easeInOut(duration: Choreo.standUp), value: seatCount)
-        .animation(.easeInOut(duration: Choreo.standUp), value: station)
     }
 
-    /// Filled = working/finished · hollow = waiting on you · warn + cross =
-    /// failed. The vocabulary of the legend, in one place.
-    @ViewBuilder
-    private var dot: some View {
-        switch session.status {
-        case .failed:
-            ZStack {
-                Circle().fill(theme.warn).frame(width: 14, height: 14)
-                CrossMark()
-                    .stroke(theme.paper, style: StrokeStyle(lineWidth: 1.8, lineCap: .round))
-                    .frame(width: 7, height: 7)
-            }
-        case .waitingForInput:
-            Circle()
-                .strokeBorder(theme.ink, lineWidth: 2)
-                .frame(width: 15, height: 15)
-        case .working, .finished:
-            Circle().fill(theme.ink).frame(width: 14, height: 14)
+    private func pose(frame: Int) -> SpritePose {
+        switch session.phase {
+        case .seated: return .seated
+        case .standing, .atDesk: return .standing
+        case .walking, .walkingBack: return .walking(frame: frame)
         }
     }
 }
 
-/// The expanding, fading ring of the "needs you" state.
-private struct PulseRing: View {
+// ─────────────────────────────────────────────────────────────────────────
+// You, seated at your desk. Not clickable — you know what you did.
+// ─────────────────────────────────────────────────────────────────────────
 
-    let theme: BlueprintTheme
-    @State private var expanded = false
+private struct PixelCharacter: View {
+
+    let name: String
+    let look: SpriteLook
+    let pose: SpritePose
+    let pillColor: Color
+    let scale: CGFloat
+    let shadow: Color
+    let feet: CGPoint
 
     var body: some View {
-        Circle()
-            .stroke(theme.ink, lineWidth: 1.4)
-            .frame(width: 20, height: 20)
-            .scaleEffect(expanded ? 1.8 : 0.8)
-            .opacity(expanded ? 0 : 0.8)
-            .onAppear {
-                withAnimation(.easeOut(duration: 2.8).repeatForever(autoreverses: false)) {
-                    expanded = true
-                }
-            }
-    }
-}
-
-/// A small ×, used only for the error state.
-private struct CrossMark: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.move(to: CGPoint(x: rect.maxX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        return path
+        let spriteHeight = PixelSprite.logicalSize.height * scale
+        VStack(spacing: 2) {
+            NamePill(name: name, color: pillColor)
+            PixelSprite(look: look, pose: pose, scale: scale, shadowColor: shadow)
+        }
+        .position(x: feet.x, y: feet.y - (spriteHeight + 22) / 2)
+        .allowsHitTesting(false)
     }
 }

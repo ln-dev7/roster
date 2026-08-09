@@ -1,77 +1,89 @@
 import XCTest
 
-/// Geometry sanity checks — cheap insurance that layout edits never make
-/// two agents overlap or push a desk through a wall.
+/// Geometry sanity checks for the pixel office — cheap insurance that
+/// layout edits never make two agents overlap or push a desk off-screen.
 final class RoomPlanTests: XCTestCase {
 
-    func testLoneAgentTakesTheChair() {
-        let station = RoomPlan.station(index: 0, of: 3)
-        XCTAssertEqual(station.seatPoint(slot: 0, of: 1), station.chairCenter)
+    private let bounds = CGRect(origin: .zero, size: RoomPlan.size)
+
+    func testPodsStayInsideTheSceneForEveryRoomSize() {
+        for count in 1...Office.maxStations {
+            for index in 0..<count {
+                let carpet = RoomPlan.pod(index: index, of: count).carpet
+                XCTAssertTrue(bounds.contains(carpet),
+                              "pod \(index + 1)/\(count) leaves the scene")
+            }
+        }
     }
 
-    func testSharedStationSpreadsSeatsApart() {
-        let station = RoomPlan.station(index: 1, of: 3)
-        let left = station.seatPoint(slot: 0, of: 2)
-        let right = station.seatPoint(slot: 1, of: 2)
+    func testNeighbouringPodsNeverOverlap() {
+        for count in 2...Office.maxStations {
+            for index in 1..<count {
+                let previous = RoomPlan.pod(index: index - 1, of: count).carpet
+                let current = RoomPlan.pod(index: index, of: count).carpet
+                XCTAssertFalse(previous.intersects(current),
+                               "pods \(index - 1) and \(index) overlap at count \(count)")
+            }
+        }
+    }
+
+    func testSeatSlotsSpreadWhenShared() {
+        let pod = RoomPlan.pod(index: 0, of: 3)
+        XCTAssertEqual(pod.seat(slot: 0, of: 1), pod.seat(slot: 1, of: 1),
+                       "a lone agent always takes the chair")
+        let left = pod.seat(slot: 0, of: 2)
+        let right = pod.seat(slot: 1, of: 2)
         XCTAssertNotEqual(left, right)
-        // Symmetric around the chair.
-        XCTAssertEqual((left.x + right.x) / 2, station.chairCenter.x, accuracy: 0.001)
+        XCTAssertEqual((left.x + right.x) / 2, pod.seat(slot: 0, of: 1).x, accuracy: 0.001)
     }
 
     func testStandPointsOfSeatSlotsDoNotCollide() {
-        let station = RoomPlan.station(index: 0, of: 3)
-        XCTAssertNotEqual(station.standPoint(slot: 0), station.standPoint(slot: 1))
+        let pod = RoomPlan.pod(index: 0, of: 3)
+        XCTAssertNotEqual(pod.stand(slot: 0), pod.stand(slot: 1))
     }
 
-    func testDeskQueueSlotsAreDistinct() {
+    func testArrivalQueueSlotsAreDistinctAndOnYourRug() {
         let points = (0..<6).map { RoomPlan.arrival(deskSlot: $0) }
         XCTAssertEqual(Set(points.map(\.x)).count, points.count,
                        "every desk slot needs its own spot")
+        for point in points {
+            XCTAssertTrue(RoomPlan.youZone.insetBy(dx: -2, dy: -2).contains(point),
+                          "arrival \(point) misses your rug")
+        }
     }
 
-    func testStationsStayInsideTheWallsForEveryRoomSize() {
+    func testBottomZonesDoNotCollide() {
+        let zones = [
+            RoomPlan.youZone,
+            RoomPlan.Furniture.loungeZone,
+            RoomPlan.Furniture.pingPong,
+        ]
+        for (i, a) in zones.enumerated() {
+            XCTAssertTrue(bounds.contains(a), "zone \(i) leaves the scene")
+            for b in zones[(i + 1)...] {
+                XCTAssertFalse(a.intersects(b), "bottom zones overlap")
+            }
+        }
+    }
+
+    func testPodsNeverReachTheBottomZones() {
         for count in 1...Office.maxStations {
             for index in 0..<count {
-                let desk = RoomPlan.station(index: index, of: count).deskRect
-                XCTAssertTrue(RoomPlan.wall.contains(desk),
-                              "desk \(index + 1)/\(count) leaves the room")
-            }
-        }
-        XCTAssertTrue(RoomPlan.wall.contains(RoomPlan.myDesk))
-    }
-
-    func testPlantsStayOutOfStationsAndCorridor() {
-        for plant in RoomPlan.Furniture.plants {
-            let zone = CGRect(
-                x: plant.center.x - plant.radius, y: plant.center.y - plant.radius,
-                width: plant.radius * 2, height: plant.radius * 2
-            )
-
-            XCTAssertTrue(RoomPlan.wall.contains(zone), "plant outside the walls")
-            XCTAssertFalse(zone.intersects(RoomPlan.myDesk))
-
-            for count in 1...Office.maxStations {
-                for index in 0..<count {
-                    let desk = RoomPlan.station(index: index, of: count).deskRect
-                    XCTAssertFalse(zone.intersects(desk),
-                                   "plant under desk \(index + 1)/\(count)")
-                }
-            }
-            for slot in 0..<6 {
-                XCTAssertFalse(zone.contains(RoomPlan.arrival(deskSlot: slot)),
-                               "arrival slot \(slot) lands on a plant")
+                let carpet = RoomPlan.pod(index: index, of: count).carpet
+                XCTAssertLessThan(carpet.maxY, RoomPlan.youZone.minY,
+                                  "pods must stay above the corridor")
             }
         }
     }
 
-    func testNeighbouringDesksNeverTouch() {
-        for count in 2...Office.maxStations {
-            for index in 1..<count {
-                let previous = RoomPlan.station(index: index - 1, of: count).deskRect
-                let current = RoomPlan.station(index: index, of: count).deskRect
-                XCTAssertFalse(previous.intersects(current),
-                               "desks \(index - 1) and \(index) overlap at count \(count)")
-            }
-        }
+    func testTransformCentersAndFits() {
+        let (scale, offset) = RoomPlan.transform(in: CGSize(width: 768, height: 440))
+        XCTAssertEqual(scale, 2, accuracy: 0.001)
+        XCTAssertEqual(offset.x, 0, accuracy: 0.001)
+        XCTAssertEqual(offset.y, 0, accuracy: 0.001)
+
+        let wide = RoomPlan.transform(in: CGSize(width: 1000, height: 440))
+        XCTAssertEqual(wide.scale, 2, accuracy: 0.001)
+        XCTAssertGreaterThan(wide.offset.x, 0)
     }
 }

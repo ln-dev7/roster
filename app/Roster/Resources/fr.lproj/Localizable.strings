@@ -63,5 +63,8 @@
 "Check for Updates…" = "Rechercher des mises à jour…";
 "Debug" = "Debug";
 
+/* ── Room ── */
+"You" = "Toi";
+
 /* ── Notification ── */
 "Finished — waiting at your desk." = "Terminé — il t'attend à ton bureau.";

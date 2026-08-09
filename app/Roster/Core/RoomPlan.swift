@@ -1,120 +1,104 @@
 import CoreGraphics
 
-/// Fixed geometry of the room, in *design units*.
+/// Fixed geometry of the pixel office, in *logical pixels*.
 ///
-/// The room is laid out once on a 960×540 canvas and the view scales the
-/// whole thing to fit the window — much easier to reason about than
-/// proportional layout, and it guarantees the composition never degrades.
-/// Every point below lives in this design space.
+/// The scene is laid out once on a 384×220 canvas; the view scales it
+/// uniformly to fit the window. Everything below is in that logical
+/// space — the renderer multiplies by the scale factor at draw time.
 ///
-/// Stations are now *computed*: give an index and the total count, get the
-/// geometry. The room spreads one to six desks evenly along the top wall.
+/// Layout: desk pods along the top (one per project, spread by count),
+/// your desk on its rug bottom-center, a lounge to the right, a
+/// ping-pong table to the left. The central corridor between the pods
+/// and your desk belongs to the walk.
 enum RoomPlan {
 
-    static let canvasSize = CGSize(width: 960, height: 540)
+    static let size = CGSize(width: 384, height: 220)
 
-    /// Inner face of the walls.
-    static let wall = CGRect(x: 20, y: 20, width: 920, height: 470)
+    /// The top wall band (with windows) is this tall.
+    static let wallHeight: CGFloat = 18
 
-    /// Spacing of the drafting grid.
-    static let gridStep: CGFloat = 24
+    // ── Desk pods ─────────────────────────────────────────────────────────
 
-    // ── Workstations ─────────────────────────────────────────────────────
+    struct Pod {
+        let x: CGFloat
 
-    /// Pure geometry of one desk; names live in `Workstation`.
-    struct Station: Equatable {
-        let centerX: CGFloat
+        var carpet: CGRect { CGRect(x: x, y: 40, width: 56, height: 46) }
+        var desk: CGRect { CGRect(x: x + 11, y: 52, width: 34, height: 12) }
+        var monitorFrame: CGRect { CGRect(x: x + 22, y: 44, width: 12, height: 9) }
+        var screen: CGRect { CGRect(x: x + 23, y: 45, width: 10, height: 6) }
+        var chair: CGRect { CGRect(x: x + 23, y: 68, width: 10, height: 8) }
+        var plantPot: CGPoint { CGPoint(x: x + 44, y: 80) }
 
-        /// The desk, seen from above.
-        var deskRect: CGRect { CGRect(x: centerX - 42, y: 92, width: 84, height: 34) }
-        /// The monitor bar on the desk (outline when off; the view overlays
-        /// a breathing fill while someone works).
-        var monitorRect: CGRect { CGRect(x: centerX - 18, y: 99, width: 36, height: 6) }
-        /// The chair.
-        var chairCenter: CGPoint { CGPoint(x: centerX, y: 152) }
-        /// Project name, lettered like a drawing annotation.
-        var labelPoint: CGPoint { CGPoint(x: centerX, y: 193) }
-
-        /// Where an agent sits. Alone it takes the chair; when two share
-        /// the station they spread symmetrically around it.
-        func seatPoint(slot: Int, of count: Int) -> CGPoint {
-            guard count > 1 else { return chairCenter }
-            let dx: CGFloat = slot == 0 ? -14 : 14
-            return CGPoint(x: chairCenter.x + dx, y: chairCenter.y)
+        /// Where an agent sits (feet point). Alone it takes the chair;
+        /// two colleagues spread around it.
+        func seat(slot: Int, of count: Int) -> CGPoint {
+            let center = CGPoint(x: x + 28, y: 76)
+            guard count > 1 else { return center }
+            return CGPoint(x: center.x + (slot == 0 ? -5 : 5), y: center.y)
         }
 
-        /// Where an agent stands when it gets up; the second occupant
-        /// stands a step further out so the two never overlap.
-        func standPoint(slot: Int) -> CGPoint {
-            CGPoint(x: centerX + 34 + CGFloat(slot) * 24, y: 152)
+        /// Where an agent stands when it gets up, beside the pod.
+        func stand(slot: Int) -> CGPoint {
+            CGPoint(x: x + 42 + CGFloat(slot) * 10, y: 78)
         }
     }
 
-    /// Geometry of station `index` in a room of `count` desks: evenly
-    /// spread along the top wall, centered as a group.
-    static func station(index: Int, of count: Int) -> Station {
-        let usable = wall.insetBy(dx: 80, dy: 0)
-        let n = CGFloat(max(count, 1))
-        let spacing = usable.width / n
-        let centerX = usable.minX + spacing * (CGFloat(index) + 0.5)
-        return Station(centerX: centerX)
+    /// Pod geometry for station `index` in a room of `count` desks:
+    /// spread along the top, centered as a group, mock-identical at 4.
+    static func pod(index: Int, of count: Int) -> Pod {
+        let podWidth: CGFloat = 56
+        guard count > 1 else { return Pod(x: (size.width - podWidth) / 2) }
+        let spacing = min(92, (size.width - 28 - podWidth) / CGFloat(count - 1))
+        let span = podWidth + spacing * CGFloat(count - 1)
+        let start = (size.width - span) / 2
+        return Pod(x: start + spacing * CGFloat(index))
     }
 
-    // ── Your desk ────────────────────────────────────────────────────────
+    // ── Your corner ───────────────────────────────────────────────────────
 
-    static let myDesk = CGRect(x: 400, y: 400, width: 160, height: 44)
-    static let myDeskInner = CGRect(x: 406, y: 406, width: 148, height: 32)
-    static let myChairCenter = CGPoint(x: 480, y: 468)
-    static let myLabelPoint = CGPoint(x: 480, y: 422)
+    static let youZone = CGRect(x: 150, y: 140, width: 84, height: 60)
+    static let youDesk = CGRect(x: 175, y: 160, width: 34, height: 12)
+    static let youMonitorFrame = CGRect(x: 186, y: 152, width: 12, height: 9)
+    static let youScreen = CGRect(x: 187, y: 153, width: 10, height: 6)
+    /// Your character's feet.
+    static let youSeat = CGPoint(x: 192, y: 186)
+    static let youPlants: [CGPoint] = [
+        CGPoint(x: 158, y: 194), CGPoint(x: 222, y: 194),
+    ]
 
     /// Where a finished agent pulls up, on the far side of your desk.
-    static let arrivalPoint = CGPoint(x: 480, y: 384)
-
-    /// Several finished agents queue side by side: first in the middle,
-    /// the next ones alternating left and right.
+    /// Several of them queue side by side, alternating left and right.
     static func arrival(deskSlot: Int) -> CGPoint {
-        let offsets: [CGFloat] = [0, -30, 30, -58, 58, -86]
+        let offsets: [CGFloat] = [0, -14, 14, -28, 28, -42]
         let dx = offsets[min(deskSlot, offsets.count - 1)]
-        return CGPoint(x: arrivalPoint.x + dx, y: arrivalPoint.y)
+        return CGPoint(x: 192 + dx, y: 156)
     }
 
-    // ── Door (bottom-left), drawn like an architect would ────────────────
-
-    static let doorHinge = CGPoint(x: 140, y: 490)
-    static let doorWidth: CGFloat = 70
-
-    // ── Sheet dressing ────────────────────────────────────────────────────
-    //
-    // The room stays sparse — no furniture clusters, they read as clutter.
-    // What remains is the architect's *sheet* vocabulary: window symbols in
-    // the walls, a few plant bushes in the corners, the title block and the
-    // north arrow. Pure line work, nothing animated, and nothing anywhere
-    // near the walking corridor.
+    // ── The rest of the furniture ─────────────────────────────────────────
 
     enum Furniture {
-        /// Window segments in the top wall (x, width); the symbol is a
-        /// paper gap crossed by two parallel lines.
-        static let windows: [(x: CGFloat, width: CGFloat)] = [
-            (255, 60), (545, 60), (715, 60),
-        ]
+        /// Window x-positions in the top wall (each 26 wide).
+        static let windowXs: [CGFloat] = [34, 106, 178, 250, 322]
 
-        /// Plant bushes: center + radius, tucked in the corners.
-        static let plants: [(center: CGPoint, radius: CGFloat)] = [
-            (CGPoint(x: 62, y: 58), 11),
-            (CGPoint(x: 62, y: 448), 11),
-            (CGPoint(x: 895, y: 452), 11),
-        ]
+        static let loungeZone = CGRect(x: 282, y: 146, width: 84, height: 50)
+        static let sofa = CGRect(x: 302, y: 154, width: 40, height: 12)
+        static let lowTable = CGRect(x: 312, y: 176, width: 18, height: 7)
+        static let loungePlant = CGPoint(x: 350, y: 190)
 
-        /// Title block, bottom right of the sheet.
-        static let cartouche = CGRect(x: 690, y: 496, width: 250, height: 26)
-        static let cartoucheDividerXs: [CGFloat] = [780, 866]
-        static let cartoucheLabels: [(text: String, x: CGFloat)] = [
-            ("ROSTER", 735), ("FLOOR PLAN", 823), ("1:50", 903),
-        ]
+        static let pingPong = CGRect(x: 32, y: 152, width: 40, height: 20)
+        static let pingPongPlant = CGPoint(x: 20, y: 146)
+    }
 
-        static let northArrowCenter = CGPoint(x: 920, y: 50)
+    // ── View transform ────────────────────────────────────────────────────
 
-        /// The dimension line stops before the cartouche.
-        static let dimensionMaxX: CGFloat = 660
+    /// Uniform scale-to-fit with centering; shared by the canvas and the
+    /// overlay views so everything agrees on where a logical point lands.
+    static func transform(in viewSize: CGSize) -> (scale: CGFloat, offset: CGPoint) {
+        let scale = min(viewSize.width / size.width, viewSize.height / size.height)
+        let offset = CGPoint(
+            x: (viewSize.width - size.width * scale) / 2,
+            y: (viewSize.height - size.height * scale) / 2
+        )
+        return (scale, offset)
     }
 }
