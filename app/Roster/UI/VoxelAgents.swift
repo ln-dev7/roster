@@ -122,21 +122,40 @@ struct VoxelSceneView: NSViewRepresentable {
                 node.removeAction(forKey: "move")
                 node.position = target
             } else if let previous = c.feet[figure.id], previous != figure.feet {
-                let move = SCNAction.move(to: target, duration: figure.moveDuration)
-                move.timingMode = figure.linearMove ? .linear : .easeInEaseOut
-                node.removeAction(forKey: "move")
-                node.runAction(move, forKey: "move")
+                if figure.moveDuration <= 0 {
+                    // Arrow-key steps arrive ~60 times a second: setting
+                    // the position directly is what smooth looks like —
+                    // piling up sixty tiny actions a second is what
+                    // stutter looks like.
+                    node.removeAction(forKey: "move")
+                    node.position = target
+                } else {
+                    let move = SCNAction.move(to: target, duration: figure.moveDuration)
+                    move.timingMode = figure.linearMove ? .linear : .easeInEaseOut
+                    node.removeAction(forKey: "move")
+                    node.runAction(move, forKey: "move")
+                }
                 // Turn toward the direction of travel — walking away shows
                 // the back of the head. This is the 3D doing the talking.
+                // Only when the heading actually CHANGES: re-issuing the
+                // same turn sixty times a second would fight itself.
                 let dx = figure.feet.x - previous.x
                 let dy = figure.feet.y - previous.y
-                if abs(dx) + abs(dy) > 0.5 {
-                    VoxelBuilder.turn(node, yaw: atan2(dx, dy))
+                if abs(dx) + abs(dy) > 0.1 {
+                    let yaw = (atan2(dx, dy) * 50).rounded() / 50
+                    if c.yaws[figure.id] != yaw {
+                        c.yaws[figure.id] = yaw
+                        VoxelBuilder.turn(node, yaw: yaw)
+                    }
                 }
             }
 
             if c.poses[figure.id] != figure.pose {
                 VoxelBuilder.apply(figure.pose, to: node)
+                // Sitting is the one pose that re-faces the camera.
+                if figure.pose == .seated {
+                    c.yaws[figure.id] = VoxelBuilder.restingYaw
+                }
             }
             c.feet[figure.id] = figure.feet
             c.poses[figure.id] = figure.pose
@@ -149,6 +168,7 @@ struct VoxelSceneView: NSViewRepresentable {
             c.nodes[id] = nil
             c.feet[id] = nil
             c.poses[id] = nil
+            c.yaws[id] = nil
         }
     }
 
@@ -167,6 +187,9 @@ struct VoxelSceneView: NSViewRepresentable {
         var nodes: [Int: SCNNode] = [:]
         var feet: [Int: CGPoint] = [:]
         var poses: [Int: VoxelPose] = [:]
+        /// Last heading applied per figure, so a steady walk issues one
+        /// turn, not one per frame.
+        var yaws: [Int: CGFloat] = [:]
         var scale: CGFloat = 0
         var offset: CGPoint = .zero
         var contentSize: CGSize = .zero
@@ -299,11 +322,13 @@ enum VoxelBuilder {
             turn(root, yaw: restingYaw)
 
         case .standing:
+            // Deliberately NO turn here: stop walking away and you stay
+            // with your back to the camera, like a person would. Only
+            // sitting down re-faces the room.
             hips.runAction(.move(to: SCNVector3(0, 0, 0), duration: settle))
             for limb in limbs {
                 limb.runAction(.rotateTo(x: 0, y: 0, z: 0, duration: settle))
             }
-            turn(root, yaw: restingYaw)
 
         case .walking:
             hips.runAction(.move(to: SCNVector3(0, 0, 0), duration: 0.1))

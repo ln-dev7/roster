@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// The pixel office. A static scene painted once in a `Canvas` (floor,
@@ -16,8 +17,10 @@ import SwiftUI
 /// opens on the right belongs to `ContentView`; the room only owns the
 /// selection value. Clicking the floor clears it, like in Gather.
 ///
-/// The arrow keys move YOUR character. Walk anywhere; stop moving near
-/// your chair and you sit back down.
+/// The arrow keys move YOUR character — a real little game loop: held
+/// keys feed a direction, a 60 Hz task advances the feet, diagonals
+/// included. When the room is zoomed in, the scroll follows you around.
+/// Stop moving near your chair and you sit back down.
 struct RoomView: View {
 
     let office: Office
@@ -33,14 +36,20 @@ struct RoomView: View {
     // ── Your character ──────────────────────────────────────────────────
     @State private var youFeet: CGPoint = RoomPlan.youSeat
     @State private var youWalking = false
+    /// The arrow keys currently held down (their key codes). keyDown adds,
+    /// keyUp removes — no reliance on the keyboard's auto-repeat, which is
+    /// what made the first version stutter.
+    @State private var pressedArrows: Set<UInt16> = []
+    /// The 60 Hz walk loop; alive exactly while a key is held.
+    @State private var walkLoop: Task<Void, Never>?
     /// The NSEvent monitor that feeds the arrow keys. Stored to remove it.
     @State private var keyMonitor: Any?
-    /// Debounce: stop "walking" shortly after the last key event.
-    @State private var settleTask: Task<Void, Never>?
 
     private static let zoomRange: ClosedRange<CGFloat> = 1...3
     /// The 3D layer needs an id for you; sessions start at 1, so -1 is safe.
     private static let youFigureID = -1
+    /// The scroll anchor that rides on your feet (camera follow).
+    private static let youAnchorID = "you-anchor"
 
     var body: some View {
         let palette = PixelPalette.current(for: colorScheme)
@@ -52,22 +61,49 @@ struct RoomView: View {
                 height: max(geo.size.height, RoomPlan.size.height * fit * zoom)
             )
 
-            ScrollView([.horizontal, .vertical]) {
-                room(contentSize: content, palette: palette)
-                    .frame(width: content.width, height: content.height)
-            }
-            .background(palette.floorB)
-            .overlay(alignment: .bottomTrailing) {
-                ZoomControls(zoom: $zoom, range: Self.zoomRange)
-                    .padding(10)
+            ScrollViewReader { proxy in
+                ScrollView([.horizontal, .vertical]) {
+                    room(contentSize: content, palette: palette)
+                        .frame(width: content.width, height: content.height)
+                }
+                .background(palette.floorB)
+                .overlay(alignment: .bottomTrailing) {
+                    ZoomControls(zoom: $zoom, range: Self.zoomRange)
+                        .padding(10)
+                }
+                // Zoomed in, the camera follows your avatar — walk to the
+                // far side of the office and the office comes with you.
+                .onChange(of: youFeet) {
+                    followAvatar(proxy)
+                }
+                .onChange(of: zoom) {
+                    followAvatar(proxy)
+                }
             }
         }
         .onAppear(perform: startListeningToArrowKeys)
         .onDisappear {
             if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
             keyMonitor = nil
-            settleTask?.cancel()
+            walkLoop?.cancel()
+            walkLoop = nil
         }
+        // If the app loses focus mid-walk the keyUp never reaches us —
+        // clear the keys so nobody walks into a wall forever.
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: NSApplication.didResignActiveNotification
+            )
+        ) { _ in
+            pressedArrows.removeAll()
+        }
+    }
+
+    /// Keeps your avatar centered while zoomed. At ×1 the whole room fits
+    /// the window and there is nothing to follow.
+    private func followAvatar(_ proxy: ScrollViewProxy) {
+        guard zoom > 1 else { return }
+        proxy.scrollTo(Self.youAnchorID, anchor: .center)
     }
 
     /// Everything inside the scroll content, at one moment's transform.
@@ -83,6 +119,13 @@ struct RoomView: View {
             PixelSceneCanvas(palette: palette, stationCount: stationCount)
                 // Clicking the floor deselects — the card slides away.
                 .onTapGesture { selection = nil }
+
+            // The invisible anchor the camera-follow scrolls to.
+            Color.clear
+                .frame(width: 1, height: 1)
+                .position(map(youFeet))
+                .id(Self.youAnchorID)
+                .allowsHitTesting(false)
 
             // Invisible tap targets over each pod's carpet: clicking a
             // desk selects whoever works there. The agent targets above
@@ -130,11 +173,12 @@ struct RoomView: View {
             .frame(width: contentSize.width, height: contentSize.height)
             .allowsHitTesting(false)
 
-            // Your name pill, floating above your head.
+            // Your name pill, floating above your head. The tiny linear
+            // animation makes it trail the body by a breath — game-style.
             NamePill(name: String(localized: "You"), color: Color(hex: 0x8A8F98))
                 .position(x: map(youFeet).x,
                           y: map(youFeet).y - VoxelBuilder.figureSize.height * scale - 12)
-                .animation(.linear(duration: 0.13), value: youFeet)
+                .animation(.linear(duration: 0.1), value: youFeet)
                 .allowsHitTesting(false)
 
             // The agents' 2D halves: pill, tap target, selection ring.
@@ -171,8 +215,11 @@ struct RoomView: View {
             id: Self.youFigureID,
             look: .you,
             feet: youFeet,
+            // While walking, feet move ~60×/s: duration 0 tells the 3D
+            // layer to set positions directly. The final sit-back-down
+            // snap (not walking) gets a small glide instead.
             pose: youPose,
-            moveDuration: 0.13,
+            moveDuration: youWalking ? 0 : 0.18,
             linearMove: true
         ))
         return list
@@ -213,6 +260,9 @@ struct RoomView: View {
 
     // ── Arrow keys ──────────────────────────────────────────────────────
 
+    /// Key codes: ← 123, → 124, ↓ 125, ↑ 126.
+    private static let arrowKeyCodes: Set<UInt16> = [123, 124, 125, 126]
+
     private var youPose: VoxelPose {
         if youWalking { return .walking }
         return youFeet == RoomPlan.youSeat ? .seated : .standing
@@ -220,50 +270,83 @@ struct RoomView: View {
 
     private func startListeningToArrowKeys() {
         guard keyMonitor == nil else { return }
-        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+        keyMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.keyDown, .keyUp]
+        ) { event in
             // Leave modified arrows (⌘←…) and text editing alone.
-            guard event.modifierFlags
-                .intersection([.command, .option, .control, .shift]).isEmpty,
+            guard Self.arrowKeyCodes.contains(event.keyCode),
+                  event.modifierFlags
+                      .intersection([.command, .option, .control, .shift]).isEmpty,
                   !(NSApp.keyWindow?.firstResponder is NSText)
             else { return event }
 
-            switch event.keyCode {
-            case 123: move(dx: -1, dy: 0)   // ←
-            case 124: move(dx: 1, dy: 0)    // →
-            case 125: move(dx: 0, dy: 1)    // ↓
-            case 126: move(dx: 0, dy: -1)   // ↑
-            default: return event
+            if event.type == .keyDown {
+                // Auto-repeats are consumed but ignored: the walk loop is
+                // the clock, the keyboard only says which keys are held.
+                if !event.isARepeat {
+                    pressedArrows.insert(event.keyCode)
+                    startWalkLoopIfNeeded()
+                }
+            } else {
+                pressedArrows.remove(event.keyCode)
             }
             return nil // consumed
         }
     }
 
-    /// One key event = one step. Key auto-repeat makes holding the key a
-    /// continuous walk; the linear per-step animation keeps it smooth.
-    private func move(dx: CGFloat, dy: CGFloat) {
-        let step: CGFloat = 4
-        withAnimation(.linear(duration: 0.13)) {
-            youFeet = CGPoint(
-                x: min(max(youFeet.x + dx * step, 8), RoomPlan.size.width - 8),
-                y: min(max(youFeet.y + dy * step, RoomPlan.wallHeight + 8),
-                       RoomPlan.size.height - 4)
-            )
-        }
+    /// The game loop: ~60 ticks a second while any arrow is held, each
+    /// tick advancing the feet by speed × elapsed time. Frame-rate
+    /// independent, diagonal-friendly, and perfectly smooth because the
+    /// 3D layer sets positions directly at this rate.
+    private func startWalkLoopIfNeeded() {
+        guard walkLoop == nil else { return }
         youWalking = true
-
-        settleTask?.cancel()
-        settleTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(220))
-            guard !Task.isCancelled else { return }
+        walkLoop = Task { @MainActor in
+            var lastTick = ContinuousClock.now
+            while !Task.isCancelled, !pressedArrows.isEmpty {
+                try? await Task.sleep(for: .milliseconds(16))
+                let now = ContinuousClock.now
+                let elapsed = lastTick.duration(to: now)
+                lastTick = now
+                // Seconds, capped: a hiccup must not teleport anyone.
+                let dt = min(
+                    Double(elapsed.components.seconds)
+                        + Double(elapsed.components.attoseconds) * 1e-18,
+                    0.05
+                )
+                step(dt: dt)
+            }
+            walkLoop = nil
             youWalking = false
-            // Close enough to the chair: sit back down.
+            // Stopped close to the chair: sit back down (small glide —
+            // see the figure's moveDuration when not walking).
             if abs(youFeet.x - RoomPlan.youSeat.x) < 7,
                abs(youFeet.y - RoomPlan.youSeat.y) < 7 {
-                withAnimation(.linear(duration: 0.13)) {
-                    youFeet = RoomPlan.youSeat
-                }
+                youFeet = RoomPlan.youSeat
             }
         }
+    }
+
+    /// One tick of walking: held keys → a unit direction → a step.
+    private func step(dt: Double) {
+        var dx: CGFloat = 0
+        var dy: CGFloat = 0
+        if pressedArrows.contains(123) { dx -= 1 }
+        if pressedArrows.contains(124) { dx += 1 }
+        if pressedArrows.contains(126) { dy -= 1 }
+        if pressedArrows.contains(125) { dy += 1 }
+        guard dx != 0 || dy != 0 else { return }
+
+        // Normalized so diagonals aren't faster, like every game ever.
+        let length = (dx * dx + dy * dy).squareRoot()
+        let speed: CGFloat = 62 // logical pixels per second
+        youFeet = CGPoint(
+            x: min(max(youFeet.x + dx / length * speed * dt, 8),
+                   RoomPlan.size.width - 8),
+            y: min(max(youFeet.y + dy / length * speed * dt,
+                       RoomPlan.wallHeight + 8),
+                   RoomPlan.size.height - 4)
+        )
     }
 }
 
