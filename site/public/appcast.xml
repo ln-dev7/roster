@@ -3,11 +3,20 @@
      release via scripts/make-appcast.py; installed copies check this URL
      once a day. An empty channel is a valid feed that simply means
      "you're up to date". -->
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
   <channel>
     <title>Roster</title>
     <link>https://roster.lndev.me/appcast.xml</link>
     <description>Updates for Roster, the little office for your coding agents.</description>
     <language>en</language>
+    <item>
+      <title>0.2.0</title>
+      <pubDate>Sun, 09 Aug 2026 20:34:31 +0000</pubDate>
+      <sparkle:version>2</sparkle:version>
+      <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<p>Roster 0.2.0.</p>]]></description>
+      <enclosure url="https://github.com/ln-dev7/roster/releases/download/v0.2.0/Roster.dmg" length="1756135" type="application/octet-stream" sparkle:edSignature="UESb08Tsuwd4daqRD09dkmb9xHxozDlasUc0CbL6m0Av+aM/URuhk5bgzb2fpgN2vJldUw74Mqjg2OdkwhuVAg=="/>
+    </item>
   </channel>
 </rss>
