@@ -3,6 +3,12 @@ import { HugeiconsIcon } from "@hugeicons/react"
 import { getTranslations, setRequestLocale } from "next-intl/server"
 
 import { FadeIn, Lift } from "@/components/site/animate"
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion"
 import { HeroRoom } from "@/components/site/hero-room"
 import { SiteFooter } from "@/components/site/site-footer"
 import { SiteHeader } from "@/components/site/site-header"
@@ -283,24 +289,32 @@ export default async function HomePage({
 
         {/* ── FAQ ──────────────────────────────────────────────────── */}
         <section id="faq" className="scroll-mt-24">
-          <div className="mx-auto w-full max-w-6xl px-6 pb-24">
+          <div className="mx-auto w-full max-w-3xl px-6 pb-24">
             <FadeIn>
               <h2 className="text-center text-3xl font-bold tracking-tight sm:text-4xl">
                 {t("faq.title")}
               </h2>
             </FadeIn>
-            <dl className="mt-12 grid gap-5 md:grid-cols-2">
-              {(["q1", "q2", "q3", "q4"] as const).map((key, index) => (
-                <FadeIn key={key} delay={index * 0.06}>
-                  <div className="h-full rounded-3xl border bg-card p-7">
-                    <dt className="font-semibold">{t(`faq.${key}.q`)}</dt>
-                    <dd className="mt-2 text-sm/6 text-muted-foreground">
-                      {t(`faq.${key}.a`)}
-                    </dd>
-                  </div>
-                </FadeIn>
-              ))}
-            </dl>
+            <FadeIn delay={0.08}>
+              <Accordion
+                className="mt-12 bg-card"
+                multiple={false}
+                defaultValue={["q1"]}
+              >
+                {(["q1", "q2", "q3", "q4"] as const).map((key) => (
+                  <AccordionItem key={key} value={key}>
+                    <AccordionTrigger className="text-base">
+                      {t(`faq.${key}.q`)}
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <p className="text-muted-foreground">
+                        {t(`faq.${key}.a`)}
+                      </p>
+                    </AccordionContent>
+                  </AccordionItem>
+                ))}
+              </Accordion>
+            </FadeIn>
           </div>
         </section>
 

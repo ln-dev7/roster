@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Roster — Un bureau pour tes agents de code",
-    "description": "Une app macOS qui transforme tes sessions Claude Code en petits collègues dans un bureau pixel. Ils travaillent à leur poste — et viennent au tien quand ils ont fini. Gratuit, open source, 100 % local."
+    "description": "Une app macOS qui transforme tes agents de code — Claude Code, Gemini CLI, Cursor, Codex — en petits collègues dans un bureau pixel. Ils travaillent à leur poste, et viennent au tien quand ils ont fini. Gratuit, open source, 100 % local."
   },
   "nav": {
     "features": "Fonctionnalités",
@@ -13,7 +13,7 @@
   "hero": {
     "badge": "Gratuit & open source · macOS",
     "title": "Tes agents de code ont enfin <mark>un bureau</mark>.",
-    "subtitle": "Roster transforme chaque session Claude Code en petit collègue dans un bureau pixel sur ton Mac. Ils travaillent à leur poste, se lèvent quand ils ont besoin de toi, et traversent jusqu'à ton bureau quand le travail est fini. Tu peux même te balader dans la pièce avec les flèches.",
+    "subtitle": "Roster transforme chaque session de code — Claude Code, Gemini CLI, Cursor ou Codex — en petit collègue dans un bureau pixel sur ton Mac. Ils travaillent à leur poste, se lèvent quand ils ont besoin de toi, et traversent jusqu'à ton bureau quand le travail est fini. Tu peux même te balader dans la pièce avec les flèches.",
     "download": "Télécharger pour macOS",
     "github": "Voir sur GitHub",
     "note": "macOS 14+ · Signé & notarisé · Sans compte, sans télémétrie",
@@ -42,7 +42,7 @@
     },
     "f2": {
       "title": "Un coup d'œil, tous les états",
-      "body": "Assis et au travail. Debout quand il attend ta réponse. En marche quand c'est fini. À ton bureau pour la review. Une pastille rouge quand un tour échoue. Les postes apparaissent avec la première session d'un projet — et partent avec la dernière."
+      "body": "Assis et au travail. Debout quand il attend ta réponse. En marche quand c'est fini. À ton bureau pour la review. Une pastille rouge quand un tour échoue. Et chaque poste porte le logo de son outil — un bureau mixte se lit d'un coup d'œil."
     },
     "f3": {
       "title": "Clique un collègue",
@@ -50,7 +50,7 @@
     },
     "f4": {
       "title": "Un vrai petit bureau",
-      "body": "Les collègues sont en vraie 3D — des corps voxel sous une vraie lumière, qui se tournent vers là où ils marchent. Balade-toi avec les flèches, zoome quand la pièce se remplit, et replie la barre latérale pour faire l'appel."
+      "body": "Les collègues sont en vraie 3D — des corps voxel sous une vraie lumière, qui se tournent vers là où ils marchent. Balade-toi avec les flèches (la caméra reste collée à toi, façon Gather), double-clique pour te presser quelque part, zoome quand la pièce se remplit."
     }
   },
   "how": {
@@ -58,7 +58,7 @@
     "title": "Trois petites pièces, toutes locales",
     "s1": {
       "title": "Un hook",
-      "body": "Avec ton accord, Roster ajoute un petit hook à chaque settings.json de Claude Code qu'il trouve — chacun sauvegardé d'abord. Ensuite, chaque événement de session est ajouté à un fichier spool local."
+      "body": "Avec ton accord, Roster câble chaque agent qu'il trouve : des hooks dans chaque settings de Claude Code et Gemini CLI, le hooks.json de Cursor, le notify de Codex — chaque config d'abord sauvegardée. Ensuite, chaque événement de session atterrit dans un fichier spool local."
     },
     "s2": {
       "title": "Un fichier spool",
@@ -73,15 +73,15 @@
   "open": {
     "eyebrow": "Open source",
     "title": "MIT, depuis le premier jour",
-    "body": "Roster est gratuit et open source. La machine à états est testée unitairement, les parties fragiles sont isolées derrière une fine couche, et chaque décision de design est écrite dans le repo — y compris la feuille de route documentée pour Gemini CLI, Codex et opencode. Des good first issues t'attendent.",
+    "body": "Roster est gratuit et open source. La machine à états est testée unitairement, les parties fragiles sont isolées derrière une fine couche, et chaque décision de design est écrite dans le repo — y compris la recherche vérifiée derrière le support multi-agents (docs/providers.md). Des good first issues t'attendent.",
     "star": "Star sur GitHub",
     "issues": "Voir les good first issues"
   },
   "faq": {
     "title": "Questions",
     "q1": {
-      "q": "Ça marche avec d'autres agents que Claude Code ?",
-      "a": "Claude Code aujourd'hui. Mais la couture est déjà dans le code, et la recherche est publique dans docs/providers.md : Gemini CLI est premier sur la liste (ses hooks sont quasi identiques), puis opencode et Codex."
+      "q": "Avec quels agents de code ça marche ?",
+      "a": "Claude Code, Gemini CLI, Cursor et Codex, directement. Roster détecte les outils installés sur ton Mac et les câble tous en un clic — chaque config est d'abord sauvegardée. opencode est le prochain sur la liste ; la recherche est publique dans docs/providers.md."
     },
     "q2": {
       "q": "Roster lit-il mon code ?",
@@ -89,16 +89,16 @@
     },
     "q3": {
       "q": "Pourquoi pas sur le Mac App Store ?",
-      "a": "Roster doit lire ~/.claude et installer son hook, ce que la sandbox de l'App Store interdit. Il est distribué en DMG signé et notarisé sur GitHub Releases."
+      "a": "Roster doit lire les dossiers de configuration de tes agents (~/.claude, ~/.gemini, …) et y installer ses hooks, ce que la sandbox de l'App Store interdit. Il est distribué en DMG signé et notarisé sur GitHub Releases."
     },
     "q4": {
-      "q": "Et si Claude Code change ses formats de fichiers ?",
-      "a": "Les hooks sur lesquels Roster s'appuie sont une interface documentée, donc le cœur est protégé. Les parties non documentées — l'amorçage par transcripts — sont isolées et échouent en silence ; au pire, la pièce rate un démarrage à chaud."
+      "q": "Et si un outil change ses formats de fichiers ?",
+      "a": "Les hooks et le notify sur lesquels Roster s'appuie sont des interfaces documentées, donc le cœur est protégé. Les parties non documentées — le scan des transcripts — sont isolées et échouent en silence ; au pire, la pièce rate un démarrage à chaud. Et si un format bouge, le correctif arrive par mise à jour automatique."
     }
   },
   "cta": {
     "title": "Offre un bureau à tes agents.",
-    "body": "Un DMG, un hook — et tes sessions deviennent des collègues. Du genre qui viennent te voir quand ils ont fini.",
+    "body": "Un DMG, un clic — et tes sessions deviennent des collègues, quel que soit l'agent qui les fait tourner.",
     "download": "Télécharger pour macOS",
     "github": "Star sur GitHub"
   },

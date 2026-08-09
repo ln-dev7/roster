@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Roster — An office for your coding agents",
-    "description": "A macOS app that turns your Claude Code sessions into little colleagues in a pixel office. They work at their desks — and walk to yours when they're done. Free, open source, local-only."
+    "description": "A macOS app that turns your coding agents — Claude Code, Gemini CLI, Cursor, Codex — into little colleagues in a pixel office. They work at their desks, and walk to yours when they're done. Free, open source, local-only."
   },
   "nav": {
     "features": "Features",
@@ -13,7 +13,7 @@
   "hero": {
     "badge": "Free & open source · macOS",
     "title": "Your coding agents just got <mark>an office</mark>.",
-    "subtitle": "Roster turns every Claude Code session into a little colleague in a pixel office on your Mac. They work at their desks, stand up when they need you, and walk over to yours when the job is done. You can even wander the room with your arrow keys.",
+    "subtitle": "Roster turns every coding session — Claude Code, Gemini CLI, Cursor or Codex — into a little colleague in a pixel office on your Mac. They work at their desks, stand up when they need you, and walk over to yours when the job is done. You can even wander the room with your arrow keys.",
     "download": "Download for macOS",
     "github": "View on GitHub",
     "note": "macOS 14+ · Signed & notarized · No account, no telemetry",
@@ -42,7 +42,7 @@
     },
     "f2": {
       "title": "One glance, every state",
-      "body": "Seated and working. Standing when it needs your input. Walking when it's done. At your desk for review. A red pill when a turn fails. Desks appear with the first session on a project — and leave with the last one."
+      "body": "Seated and working. Standing when it needs your input. Walking when it's done. At your desk for review. A red pill when a turn fails. And each desk wears its tool's logo, so a mixed office reads at a glance."
     },
     "f3": {
       "title": "Click a colleague",
@@ -50,7 +50,7 @@
     },
     "f4": {
       "title": "A real little office",
-      "body": "The colleagues are real 3D — voxel bodies under a real light, turning toward wherever they walk. Stroll around with the arrow keys, zoom in when the room gets crowded, and toggle the sidebar for the roll call."
+      "body": "The colleagues are real 3D — voxel bodies under a real light, turning toward wherever they walk. Stroll around with the arrow keys (the camera stays glued to you, Gather-style), double-click to hurry somewhere, zoom when the room gets crowded."
     }
   },
   "how": {
@@ -58,7 +58,7 @@
     "title": "Three small pieces, all local",
     "s1": {
       "title": "A hook",
-      "body": "With your consent, Roster adds a small hook to every Claude Code settings.json it finds — each one backed up first. From then on, every session event is appended to a local spool file."
+      "body": "With your consent, Roster wires every agent it finds: hooks in each Claude Code and Gemini CLI settings, Cursor's hooks.json, Codex's notify — every config backed up first. From then on, each session event lands in a local spool file."
     },
     "s2": {
       "title": "A spool file",
@@ -73,15 +73,15 @@
   "open": {
     "eyebrow": "Open source",
     "title": "MIT, from day one",
-    "body": "Roster is free and open source. The state machine is unit-tested, the fragile parts are isolated behind a thin layer, and every design decision is written down in the repo — including the researched roadmap for Gemini CLI, Codex and opencode support. Good first issues are waiting for you.",
+    "body": "Roster is free and open source. The state machine is unit-tested, the fragile parts are isolated behind a thin layer, and every design decision is written down in the repo — including the verified research behind the multi-agent support (docs/providers.md). Good first issues are waiting for you.",
     "star": "Star on GitHub",
     "issues": "Browse good first issues"
   },
   "faq": {
     "title": "Questions",
     "q1": {
-      "q": "Does it work with agents other than Claude Code?",
-      "a": "Claude Code today. But the seam is already in the code, and the research is public in docs/providers.md: Gemini CLI is first in line (its hooks are nearly identical), then opencode and Codex."
+      "q": "Which coding agents does it work with?",
+      "a": "Claude Code, Gemini CLI, Cursor and Codex, out of the box. Roster detects the tools installed on your Mac and wires them all with one click — each config backed up first. opencode is next on the list; the research is public in docs/providers.md."
     },
     "q2": {
       "q": "Does Roster read my code?",
@@ -89,16 +89,16 @@
     },
     "q3": {
       "q": "Why isn't it on the Mac App Store?",
-      "a": "Roster needs to read ~/.claude and install its hook, which the App Store sandbox forbids. It ships as a signed, notarized DMG on GitHub Releases instead."
+      "a": "Roster needs to read your agents' config folders (~/.claude, ~/.gemini, …) and install its hooks there, which the App Store sandbox forbids. It ships as a signed, notarized DMG on GitHub Releases instead."
     },
     "q4": {
-      "q": "What if Claude Code changes its file formats?",
-      "a": "The hooks Roster relies on are a documented interface, so the core is safe. The undocumented parts — the transcript bootstrap — are isolated and fail silently; worst case, the room misses a warm start."
+      "q": "What if a tool changes its file formats?",
+      "a": "The hooks and notify mechanisms Roster relies on are documented interfaces, so the core is safe. The undocumented parts — transcript scanning — are isolated and fail silently; worst case, the room misses a warm start. And when something drifts, the fix is one automatic update away."
     }
   },
   "cta": {
     "title": "Give your agents a desk.",
-    "body": "One DMG, one hook — and your sessions become colleagues. The kind that walk over when they're done.",
+    "body": "One DMG, one click — and your coding sessions become colleagues, whichever agent runs them.",
     "download": "Download for macOS",
     "github": "Star on GitHub"
   },
