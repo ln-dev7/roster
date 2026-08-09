@@ -6,7 +6,7 @@ import { LocaleSwitcher } from "@/components/site/locale-switcher"
 import { RosterMark } from "@/components/site/roster-mark"
 import { ThemeToggle } from "@/components/site/theme-toggle"
 import { Button } from "@/components/ui/button"
-import { GITHUB_URL, RELEASES_URL } from "@/lib/links"
+import { DOWNLOAD_URL, GITHUB_URL } from "@/lib/links"
 
 export async function SiteHeader() {
   const t = await getTranslations("nav")
@@ -56,7 +56,7 @@ export async function SiteHeader() {
           <Button
             size="sm"
             className="ml-1 hidden rounded-full sm:inline-flex"
-            render={<a href={RELEASES_URL} />}
+            render={<a href={DOWNLOAD_URL} />}
           >
             {t("download")}
           </Button>

@@ -8,7 +8,7 @@ import { SiteFooter } from "@/components/site/site-footer"
 import { SiteHeader } from "@/components/site/site-header"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { GITHUB_URL, GOOD_FIRST_ISSUES_URL, RELEASES_URL } from "@/lib/links"
+import { DOWNLOAD_URL, GITHUB_URL, GOOD_FIRST_ISSUES_URL } from "@/lib/links"
 
 /** The app's status colors — the same vocabulary as the room. */
 const STATUS = {
@@ -96,7 +96,7 @@ export default async function HomePage({
               <Button
                 size="lg"
                 className="rounded-full px-7"
-                render={<a href={RELEASES_URL} />}
+                render={<a href={DOWNLOAD_URL} />}
               >
                 <HugeiconsIcon icon={Download01Icon} data-icon="inline-start" />
                 {t("hero.download")}
@@ -361,7 +361,7 @@ export default async function HomePage({
                 <Button
                   size="lg"
                   className="rounded-full bg-white px-7 text-primary hover:bg-white/90"
-                  render={<a href={RELEASES_URL} />}
+                  render={<a href={DOWNLOAD_URL} />}
                 >
                   <HugeiconsIcon
                     icon={Download01Icon}

@@ -5,6 +5,7 @@ import { Separator } from "@/components/ui/separator"
 import {
   AUTHOR_URL,
   DOCKKEEP_URL,
+  DOWNLOAD_URL,
   GITHUB_URL,
   GOOD_FIRST_ISSUES_URL,
   ISSUES_URL,
@@ -20,7 +21,7 @@ export async function SiteFooter() {
     {
       title: t("product"),
       links: [
-        { label: t("download"), href: RELEASES_URL },
+        { label: t("download"), href: DOWNLOAD_URL },
         { label: t("releases"), href: `${GITHUB_URL}/releases` },
         { label: t("roadmap"), href: ISSUES_URL },
       ],
