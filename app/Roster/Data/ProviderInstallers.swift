@@ -52,10 +52,14 @@ enum HelperScript {
         dir="$HOME/Library/Application Support/Roster"
         mkdir -p "$dir"
         if [ -n "$2" ]; then
-          printf '%s\\n' "$2" | /usr/bin/sed -e "s/^{/{\\"roster_provider\\":\\"$1\\",/" >> "$dir/events.jsonl"
+          payload="$2"
         else
-          /usr/bin/sed -e "s/^{/{\\"roster_provider\\":\\"$1\\",/" >> "$dir/events.jsonl"
+          # $( ) strips trailing newlines. That's the point: Gemini CLI
+          # writes its payload WITHOUT one (verified live), and a missing
+          # newline would glue two events onto a single spool line.
+          payload=$(cat)
         fi
+        [ -n "$payload" ] && printf '%s\\n' "$payload" | /usr/bin/sed -e "s/^{/{\\"roster_provider\\":\\"$1\\",/" >> "$dir/events.jsonl"
         # Gemini requires hook stdout to be nothing but JSON; everyone
         # else ignores stdout. An empty object satisfies both.
         printf '{}\\n'
