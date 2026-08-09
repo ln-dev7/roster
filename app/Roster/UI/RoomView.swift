@@ -69,8 +69,10 @@ private struct BlueprintCanvas: View {
     var body: some View {
         Canvas { context, _ in
             drawGrid(in: context)
+            drawFurniture(in: context)
             drawWallsAndDoor(in: context)
-            drawDimensionLine(in: context)
+            drawWindows(in: context)
+            drawSheetAnnotations(in: context)
             for (index, name) in stationNames.enumerated() {
                 let station = RoomPlan.station(index: index, of: stationNames.count)
                 draw(station: station, named: name, in: context)
@@ -132,18 +134,169 @@ private struct BlueprintCanvas: View {
                        style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
     }
 
-    /// A decorative dimension line below the room — pure blueprint flavour.
-    private func drawDimensionLine(in context: GraphicsContext) {
+    /// Window symbols: a paper gap in the wall crossed by two parallel
+    /// lines, capped at both ends — the way an architect draws one.
+    private func drawWindows(in context: GraphicsContext) {
+        let wallY = RoomPlan.wall.minY
+        for window in RoomPlan.Furniture.windows {
+            let gap = CGRect(x: window.x, y: wallY - 4, width: window.width, height: 8)
+            context.fill(Path(gap), with: .color(theme.paper))
+
+            var lines = Path()
+            lines.move(to: CGPoint(x: window.x, y: wallY - 2))
+            lines.addLine(to: CGPoint(x: window.x + window.width, y: wallY - 2))
+            lines.move(to: CGPoint(x: window.x, y: wallY + 2))
+            lines.addLine(to: CGPoint(x: window.x + window.width, y: wallY + 2))
+            context.stroke(lines, with: .color(theme.ink), lineWidth: 1.1)
+
+            var caps = Path()
+            caps.move(to: CGPoint(x: window.x, y: wallY - 4))
+            caps.addLine(to: CGPoint(x: window.x, y: wallY + 4))
+            caps.move(to: CGPoint(x: window.x + window.width, y: wallY - 4))
+            caps.addLine(to: CGPoint(x: window.x + window.width, y: wallY + 4))
+            context.stroke(caps, with: .color(theme.ink), lineWidth: 1.2)
+        }
+    }
+
+    /// Everything that lives on the sheet rather than in the room: the
+    /// dimension line, the title block and the north arrow.
+    private func drawSheetAnnotations(in context: GraphicsContext) {
         let wall = RoomPlan.wall
+        typealias F = RoomPlan.Furniture
+
+        // Dimension line, stopping before the cartouche.
         let y = wall.maxY + 18
         var dims = Path()
         dims.move(to: CGPoint(x: wall.minX, y: y))
-        dims.addLine(to: CGPoint(x: wall.maxX, y: y))
+        dims.addLine(to: CGPoint(x: F.dimensionMaxX, y: y))
         dims.move(to: CGPoint(x: wall.minX, y: y - 5))
         dims.addLine(to: CGPoint(x: wall.minX, y: y + 5))
-        dims.move(to: CGPoint(x: wall.maxX, y: y - 5))
-        dims.addLine(to: CGPoint(x: wall.maxX, y: y + 5))
+        dims.move(to: CGPoint(x: F.dimensionMaxX, y: y - 5))
+        dims.addLine(to: CGPoint(x: F.dimensionMaxX, y: y + 5))
         context.stroke(dims, with: .color(theme.inkSoft), lineWidth: 1)
+
+        // Title block.
+        var cartouche = Path(F.cartouche)
+        for x in F.cartoucheDividerXs {
+            cartouche.move(to: CGPoint(x: x, y: F.cartouche.minY))
+            cartouche.addLine(to: CGPoint(x: x, y: F.cartouche.maxY))
+        }
+        context.stroke(cartouche, with: .color(theme.inkSoft), lineWidth: 1)
+        for label in F.cartoucheLabels {
+            var text = context.resolve(
+                Text(label.text)
+                    .font(.system(size: 8, design: .monospaced))
+                    .kerning(1.5)
+            )
+            text.shading = .color(theme.inkSoft)
+            context.draw(text, at: CGPoint(x: label.x, y: F.cartouche.midY), anchor: .center)
+        }
+
+        // North arrow.
+        let north = F.northArrowCenter
+        context.stroke(
+            Path(ellipseIn: CGRect(x: north.x - 9, y: north.y - 9, width: 18, height: 18)),
+            with: .color(theme.inkSoft), lineWidth: 1
+        )
+        var needle = Path()
+        needle.move(to: CGPoint(x: north.x, y: north.y + 5))
+        needle.addLine(to: CGPoint(x: north.x, y: north.y - 6))
+        needle.move(to: CGPoint(x: north.x - 3, y: north.y - 2))
+        needle.addLine(to: CGPoint(x: north.x, y: north.y - 6))
+        needle.addLine(to: CGPoint(x: north.x + 3, y: north.y - 2))
+        context.stroke(needle, with: .color(theme.ink), lineWidth: 1.2)
+        var n = context.resolve(
+            Text("N").font(.system(size: 8, design: .monospaced))
+        )
+        n.shading = .color(theme.inkSoft)
+        context.draw(n, at: CGPoint(x: north.x, y: north.y + 18), anchor: .center)
+    }
+
+    /// The furniture: sofa corner on its rug, meeting table, bookshelf,
+    /// plants. Pure decoration in the architect's vocabulary; it never
+    /// enters the walking corridor (a geometry test enforces that).
+    private func drawFurniture(in context: GraphicsContext) {
+        typealias F = RoomPlan.Furniture
+
+        // Rug (dashed) under the sofa corner.
+        context.stroke(
+            Path(roundedRect: F.rug, cornerRadius: 10),
+            with: .color(theme.inkFaint),
+            style: StrokeStyle(lineWidth: 1.2, dash: [2, 4])
+        )
+
+        // Sofa: outline, back line, cushion dividers.
+        context.stroke(Path(roundedRect: F.sofa, cornerRadius: 6),
+                       with: .color(theme.ink), style: StrokeStyle(lineWidth: 1.3))
+        var sofaLines = Path()
+        for x in F.sofaCushionXs {
+            sofaLines.move(to: CGPoint(x: x, y: F.sofa.minY))
+            sofaLines.addLine(to: CGPoint(x: x, y: F.sofa.maxY))
+        }
+        context.stroke(sofaLines, with: .color(theme.ink), lineWidth: 1.3)
+        var back = Path()
+        back.move(to: CGPoint(x: F.sofa.minX, y: F.sofaBackY))
+        back.addLine(to: CGPoint(x: F.sofa.maxX, y: F.sofaBackY))
+        context.stroke(back, with: .color(theme.inkSoft), lineWidth: 1)
+
+        // Coffee table.
+        let table = F.coffeeTableCenter
+        context.stroke(
+            Path(ellipseIn: CGRect(x: table.x - F.coffeeTableRadius, y: table.y - F.coffeeTableRadius,
+                                   width: F.coffeeTableRadius * 2, height: F.coffeeTableRadius * 2)),
+            with: .color(theme.ink), style: StrokeStyle(lineWidth: 1.3)
+        )
+        context.stroke(
+            Path(ellipseIn: CGRect(x: table.x - 6, y: table.y - 6, width: 12, height: 12)),
+            with: .color(theme.inkSoft), style: StrokeStyle(lineWidth: 1)
+        )
+
+        // Meeting table and its six chairs.
+        let meeting = F.meetingTableCenter
+        context.stroke(
+            Path(ellipseIn: CGRect(x: meeting.x - F.meetingTableRadii.width,
+                                   y: meeting.y - F.meetingTableRadii.height,
+                                   width: F.meetingTableRadii.width * 2,
+                                   height: F.meetingTableRadii.height * 2)),
+            with: .color(theme.ink), style: StrokeStyle(lineWidth: 1.4)
+        )
+        for chair in F.meetingChairs {
+            context.stroke(
+                Path(ellipseIn: CGRect(x: chair.x - 8, y: chair.y - 8, width: 16, height: 16)),
+                with: .color(theme.inkSoft), style: StrokeStyle(lineWidth: 1.2)
+            )
+        }
+
+        // Bookshelf.
+        context.stroke(Path(F.bookshelf), with: .color(theme.ink),
+                       style: StrokeStyle(lineWidth: 1.3))
+        var shelves = Path()
+        for y in F.bookshelfShelfYs {
+            shelves.move(to: CGPoint(x: F.bookshelf.minX, y: y))
+            shelves.addLine(to: CGPoint(x: F.bookshelf.maxX, y: y))
+        }
+        context.stroke(shelves, with: .color(theme.ink), lineWidth: 1)
+
+        // Plants: a dashed bush with five fronds.
+        for plant in F.plants {
+            let c = plant.center
+            let r = plant.radius
+            context.stroke(
+                Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)),
+                with: .color(theme.inkSoft),
+                style: StrokeStyle(lineWidth: 1.1, dash: [2, 3])
+            )
+            var fronds = Path()
+            let tips: [CGPoint] = [
+                CGPoint(x: 0, y: -r + 2), CGPoint(x: r - 4, y: -r / 2), CGPoint(x: -r + 4, y: -r / 2),
+                CGPoint(x: r / 2.5, y: r - 3), CGPoint(x: -r / 2.5, y: r - 3),
+            ]
+            for tip in tips {
+                fronds.move(to: c)
+                fronds.addLine(to: CGPoint(x: c.x + tip.x, y: c.y + tip.y))
+            }
+            context.stroke(fronds, with: .color(theme.inkSoft), lineWidth: 1.1)
+        }
     }
 
     private func draw(station: RoomPlan.Station, named name: String,

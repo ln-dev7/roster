@@ -82,4 +82,63 @@ enum RoomPlan {
 
     static let doorHinge = CGPoint(x: 140, y: 490)
     static let doorWidth: CGFloat = 70
+
+    // ── Furniture ─────────────────────────────────────────────────────────
+    //
+    // The room is furnished the way an architect annotates a plan: window
+    // symbols in the walls, a sofa corner on its dashed rug, an oval
+    // meeting table, a bookshelf, plant bushes, a title block and a north
+    // arrow. Pure decoration — nothing animates, nothing is interactive —
+    // and everything lives OUT of the walking corridor (the central band
+    // between the stations and your desk). A geometry test enforces that.
+
+    enum Furniture {
+        /// Window segments in the top wall (x, width); the symbol is a
+        /// paper gap crossed by two parallel lines.
+        static let windows: [(x: CGFloat, width: CGFloat)] = [
+            (255, 60), (545, 60), (715, 60),
+        ]
+
+        /// Sofa corner (left side).
+        static let rug = CGRect(x: 48, y: 284, width: 190, height: 128)
+        static let sofa = CGRect(x: 64, y: 300, width: 150, height: 38)
+        static let sofaCushionXs: [CGFloat] = [114, 164]
+        static let sofaBackY: CGFloat = 308
+        static let coffeeTableCenter = CGPoint(x: 139, y: 376)
+        static let coffeeTableRadius: CGFloat = 16
+
+        /// Meeting corner (right side).
+        static let meetingTableCenter = CGPoint(x: 790, y: 318)
+        static let meetingTableRadii = CGSize(width: 70, height: 32)
+        static let meetingChairs: [CGPoint] = [
+            CGPoint(x: 720, y: 290), CGPoint(x: 790, y: 276), CGPoint(x: 860, y: 290),
+            CGPoint(x: 720, y: 346), CGPoint(x: 790, y: 360), CGPoint(x: 860, y: 346),
+        ]
+        /// Bounding box of the whole meeting corner, for collision tests.
+        static let meetingBounds = CGRect(x: 712, y: 268, width: 156, height: 100)
+
+        /// Bookshelf against the right wall.
+        static let bookshelf = CGRect(x: 902, y: 230, width: 32, height: 130)
+        static let bookshelfShelfYs: [CGFloat] = [256, 282, 308, 334]
+
+        /// Plant bushes: center + radius.
+        static let plants: [(center: CGPoint, radius: CGFloat)] = [
+            (CGPoint(x: 62, y: 58), 11),
+            (CGPoint(x: 688, y: 252), 11),
+            (CGPoint(x: 895, y: 452), 11),
+            (CGPoint(x: 258, y: 296), 9),
+        ]
+
+        /// Title block, bottom right of the sheet.
+        static let cartouche = CGRect(x: 690, y: 496, width: 250, height: 26)
+        static let cartoucheDividerXs: [CGFloat] = [780, 866]
+        static let cartoucheLabels: [(text: String, x: CGFloat)] = [
+            ("ROSTER", 735), ("FLOOR PLAN", 823), ("1:50", 903),
+        ]
+
+        static let northArrowCenter = CGPoint(x: 920, y: 50)
+
+        /// The dimension line stops before the cartouche.
+        static let dimensionMaxX: CGFloat = 660
+    }
 }
