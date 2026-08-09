@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import os
+import SwiftUI
 
 /// The live data source: hook install state, the spool tail, and the
 /// transcript scan. Everything fragile about depending on Claude Code's
@@ -43,6 +44,12 @@ final class ClaudeCodeSource {
     @ObservationIgnored private var rescanTask: Task<Void, Never>?
     /// session key → transcript file, for the staleness sweep.
     @ObservationIgnored private var transcripts: [String: URL] = [:]
+    /// Sessions that ENDED, with when. The transcript file outlives the
+    /// session, and its mtime stays "fresh" for a few minutes — without
+    /// this tombstone the 30-second rescan would resurrect a session the
+    /// user just quit. A transcript modified AFTER its tombstone means
+    /// the session was resumed, and the tombstone is lifted.
+    @ObservationIgnored private var endedAt: [String: Date] = [:]
     /// How many desks were last persisted — save only when it changes.
     @ObservationIgnored private var savedStationCount = 0
 
@@ -160,7 +167,23 @@ final class ClaudeCodeSource {
         }
         eventsProcessed += 1
         log.info("event #\(self.eventsProcessed): \(String(describing: event), privacy: .public)")
-        office.apply(event)
+
+        switch event {
+        case .sessionEnd(let key):
+            // Tombstone first, so the rescan can't resurrect it.
+            endedAt[key] = Date()
+        case .sessionStart(let key, _), .promptSubmitted(let key, _),
+             .needsInput(let key, _), .completed(let key, _),
+             .stopped(let key, _, _), .stopFailed(let key, _):
+            // Any sign of life lifts a tombstone (resumed session).
+            endedAt[key] = nil
+        }
+
+        // withAnimation so session arrivals/departures fade like the demo
+        // ones (RoomView's insertion/removal transitions).
+        withAnimation(.easeOut(duration: 0.45)) {
+            office.apply(event)
+        }
         persistWorkstationsIfNeeded()
     }
 
@@ -202,11 +225,23 @@ final class ClaudeCodeSource {
                     guard let modified = modificationDate(of: transcript) else { continue }
                     let key = transcript.deletingPathExtension().lastPathComponent
 
+                    // Ended sessions stay dead — unless the transcript
+                    // moved on since (resume), which lifts the tombstone.
+                    if let ended = endedAt[key] {
+                        if modified > ended.addingTimeInterval(2) {
+                            endedAt[key] = nil
+                        } else {
+                            continue
+                        }
+                    }
+
                     if Date().timeIntervalSince(modified) < aliveWindow {
                         transcripts[key] = transcript
                         guard let cwd = Self.cwd(fromTranscript: transcript) else { continue }
                         // Idempotent: a session already in the room is a no-op.
-                        office.apply(.sessionStart(key: key, cwd: cwd))
+                        withAnimation(.easeOut(duration: 0.45)) {
+                            office.apply(.sessionStart(key: key, cwd: cwd))
+                        }
                         found += 1
                     }
                 }
@@ -223,9 +258,18 @@ final class ClaudeCodeSource {
             guard let modified = modificationDate(of: url) else { continue }
             if Date().timeIntervalSince(modified) > staleAfter {
                 log.info("session \(key, privacy: .public) stale; retiring")
-                office.apply(.sessionEnd(key: key))
+                endedAt[key] = Date()
+                withAnimation(.easeOut(duration: 0.45)) {
+                    office.apply(.sessionEnd(key: key))
+                }
                 transcripts[key] = nil
             }
+        }
+
+        // Tombstones older than the alive window can go: a transcript that
+        // old wouldn't count as live anyway.
+        for (key, date) in endedAt where Date().timeIntervalSince(date) > aliveWindow {
+            endedAt[key] = nil
         }
     }
 

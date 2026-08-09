@@ -40,33 +40,27 @@ final class RoomPlanTests: XCTestCase {
         XCTAssertTrue(RoomPlan.wall.contains(RoomPlan.myDesk))
     }
 
-    func testFurnitureStaysOutOfStationsAndCorridor() {
-        typealias F = RoomPlan.Furniture
-        let furniture: [CGRect] = [F.rug, F.meetingBounds, F.bookshelf]
+    func testPlantsStayOutOfStationsAndCorridor() {
+        for plant in RoomPlan.Furniture.plants {
+            let zone = CGRect(
+                x: plant.center.x - plant.radius, y: plant.center.y - plant.radius,
+                width: plant.radius * 2, height: plant.radius * 2
+            )
 
-        // Never under a desk, whatever the room size.
-        for count in 1...Office.maxStations {
-            for index in 0..<count {
-                let desk = RoomPlan.station(index: index, of: count).deskRect
-                for zone in furniture {
+            XCTAssertTrue(RoomPlan.wall.contains(zone), "plant outside the walls")
+            XCTAssertFalse(zone.intersects(RoomPlan.myDesk))
+
+            for count in 1...Office.maxStations {
+                for index in 0..<count {
+                    let desk = RoomPlan.station(index: index, of: count).deskRect
                     XCTAssertFalse(zone.intersects(desk),
-                                   "furniture under desk \(index + 1)/\(count)")
+                                   "plant under desk \(index + 1)/\(count)")
                 }
             }
-        }
-
-        // Never on your desk, nor on the arrival queue.
-        for zone in furniture {
-            XCTAssertFalse(zone.intersects(RoomPlan.myDesk))
             for slot in 0..<6 {
                 XCTAssertFalse(zone.contains(RoomPlan.arrival(deskSlot: slot)),
-                               "arrival slot \(slot) lands on furniture")
+                               "arrival slot \(slot) lands on a plant")
             }
-        }
-
-        // Everything stays inside the walls.
-        for zone in furniture {
-            XCTAssertTrue(RoomPlan.wall.contains(zone))
         }
     }
 

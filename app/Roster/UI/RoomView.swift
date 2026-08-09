@@ -212,70 +212,10 @@ private struct BlueprintCanvas: View {
         context.draw(n, at: CGPoint(x: north.x, y: north.y + 18), anchor: .center)
     }
 
-    /// The furniture: sofa corner on its rug, meeting table, bookshelf,
-    /// plants. Pure decoration in the architect's vocabulary; it never
-    /// enters the walking corridor (a geometry test enforces that).
+    /// The only "furniture" left: plant bushes in the corners. Everything
+    /// heavier (sofas, tables) read as clutter — removed on purpose.
     private func drawFurniture(in context: GraphicsContext) {
         typealias F = RoomPlan.Furniture
-
-        // Rug (dashed) under the sofa corner.
-        context.stroke(
-            Path(roundedRect: F.rug, cornerRadius: 10),
-            with: .color(theme.inkFaint),
-            style: StrokeStyle(lineWidth: 1.2, dash: [2, 4])
-        )
-
-        // Sofa: outline, back line, cushion dividers.
-        context.stroke(Path(roundedRect: F.sofa, cornerRadius: 6),
-                       with: .color(theme.ink), style: StrokeStyle(lineWidth: 1.3))
-        var sofaLines = Path()
-        for x in F.sofaCushionXs {
-            sofaLines.move(to: CGPoint(x: x, y: F.sofa.minY))
-            sofaLines.addLine(to: CGPoint(x: x, y: F.sofa.maxY))
-        }
-        context.stroke(sofaLines, with: .color(theme.ink), lineWidth: 1.3)
-        var back = Path()
-        back.move(to: CGPoint(x: F.sofa.minX, y: F.sofaBackY))
-        back.addLine(to: CGPoint(x: F.sofa.maxX, y: F.sofaBackY))
-        context.stroke(back, with: .color(theme.inkSoft), lineWidth: 1)
-
-        // Coffee table.
-        let table = F.coffeeTableCenter
-        context.stroke(
-            Path(ellipseIn: CGRect(x: table.x - F.coffeeTableRadius, y: table.y - F.coffeeTableRadius,
-                                   width: F.coffeeTableRadius * 2, height: F.coffeeTableRadius * 2)),
-            with: .color(theme.ink), style: StrokeStyle(lineWidth: 1.3)
-        )
-        context.stroke(
-            Path(ellipseIn: CGRect(x: table.x - 6, y: table.y - 6, width: 12, height: 12)),
-            with: .color(theme.inkSoft), style: StrokeStyle(lineWidth: 1)
-        )
-
-        // Meeting table and its six chairs.
-        let meeting = F.meetingTableCenter
-        context.stroke(
-            Path(ellipseIn: CGRect(x: meeting.x - F.meetingTableRadii.width,
-                                   y: meeting.y - F.meetingTableRadii.height,
-                                   width: F.meetingTableRadii.width * 2,
-                                   height: F.meetingTableRadii.height * 2)),
-            with: .color(theme.ink), style: StrokeStyle(lineWidth: 1.4)
-        )
-        for chair in F.meetingChairs {
-            context.stroke(
-                Path(ellipseIn: CGRect(x: chair.x - 8, y: chair.y - 8, width: 16, height: 16)),
-                with: .color(theme.inkSoft), style: StrokeStyle(lineWidth: 1.2)
-            )
-        }
-
-        // Bookshelf.
-        context.stroke(Path(F.bookshelf), with: .color(theme.ink),
-                       style: StrokeStyle(lineWidth: 1.3))
-        var shelves = Path()
-        for y in F.bookshelfShelfYs {
-            shelves.move(to: CGPoint(x: F.bookshelf.minX, y: y))
-            shelves.addLine(to: CGPoint(x: F.bookshelf.maxX, y: y))
-        }
-        context.stroke(shelves, with: .color(theme.ink), lineWidth: 1)
 
         // Plants: a dashed bush with five fronds.
         for plant in F.plants {
