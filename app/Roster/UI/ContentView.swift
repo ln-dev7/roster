@@ -162,7 +162,7 @@ private struct ConnectBanner: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Text("Sessions appear automatically (read-only). Connect to unlock the waiting, finished and error states — adds a small hook to ~/.claude/settings.json, after backing it up.")
+            Text("Sessions appear automatically (read-only). Connect to unlock the waiting, finished and error states — small hooks are added to each agent's config (Claude Code, plus Gemini CLI, Cursor or Codex when detected), every file backed up first.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             Spacer()

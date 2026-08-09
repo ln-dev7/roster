@@ -18,7 +18,7 @@
 "Last turn failed" = "Le dernier tour a échoué";
 
 /* ── Banner ── */
-"Sessions appear automatically (read-only). Connect to unlock the waiting, finished and error states — adds a small hook to ~/.claude/settings.json, after backing it up." = "Les sessions apparaissent automatiquement (lecture seule). Connecte pour débloquer les états attente, terminé et erreur — ajoute un petit hook à ~/.claude/settings.json, après sauvegarde.";
+"Sessions appear automatically (read-only). Connect to unlock the waiting, finished and error states — small hooks are added to each agent's config (Claude Code, plus Gemini CLI, Cursor or Codex when detected), every file backed up first." = "Les sessions apparaissent automatiquement (lecture seule). Connecte pour débloquer les états attente, terminé et erreur — de petits hooks sont ajoutés à la config de chaque agent (Claude Code, plus Gemini CLI, Cursor ou Codex s'ils sont détectés), chaque fichier étant d'abord sauvegardé.";
 "Connect" = "Connecter";
 "Retry" = "Réessayer";
 
@@ -42,7 +42,7 @@
 
 /* ── Settings ── */
 "General" = "Général";
-"Claude Code" = "Claude Code";
+"Agents" = "Agents";
 "Keep window on top" = "Garder la fenêtre au premier plan";
 "Notify when an agent reaches your desk" = "Notifier quand un agent arrive à ton bureau";
 "Walk threshold" = "Seuil de traversée";
@@ -52,8 +52,13 @@
 "Config folders" = "Dossiers de configuration";
 "Folders named ~/.claude* are found automatically. If your shell aliases point CLAUDE_CONFIG_DIR somewhere else, add that folder here." = "Les dossiers nommés ~/.claude* sont détectés automatiquement. Si tes alias shell pointent CLAUDE_CONFIG_DIR ailleurs, ajoute ce dossier ici.";
 "Add config folder…" = "Ajouter un dossier de configuration…";
-"Install hooks in all folders" = "Installer les hooks dans tous les dossiers";
-"Adds Roster's event hooks to each folder's settings.json — a timestamped backup is written first. This is what unlocks the waiting, finished and error states." = "Ajoute les hooks d'événements de Roster au settings.json de chaque dossier — une sauvegarde horodatée est écrite d'abord. C'est ce qui débloque les états attente, terminé et erreur.";
+"Other coding agents" = "Autres agents de code";
+"None detected — install Gemini CLI, Cursor or Codex and this list fills in by itself." = "Aucun détecté — installe Gemini CLI, Cursor ou Codex et cette liste se remplit toute seule.";
+"Tools found on this Mac. Connect wires each one to the room through its own mechanism (hooks or notify), always after a timestamped backup of its config." = "Les outils trouvés sur ce Mac. Connecter relie chacun à la pièce par son propre mécanisme (hooks ou notify), toujours après une sauvegarde horodatée de sa config.";
+"Connect everything" = "Tout connecter";
+"Adds Roster's event wiring to every Claude Code folder and every detected tool — each config is backed up first. This is what unlocks the waiting, finished and error states." = "Ajoute le câblage d'événements de Roster à chaque dossier Claude Code et à chaque outil détecté — chaque config est d'abord sauvegardée. C'est ce qui débloque les états attente, terminé et erreur.";
+"Connected" = "Connecté";
+"Not connected" = "Non connecté";
 "Hooks installed" = "Hooks installés";
 "Remove" = "Retirer";
 

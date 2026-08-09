@@ -2,7 +2,8 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Settings (⌘,) — two panes, DockKeep style: General for the room's
-/// behavior, Claude Code for the connection and its config folders.
+/// behavior, Agents for the connections (Claude Code's config folders
+/// plus every other detected tool).
 struct SettingsView: View {
 
     let office: Office
@@ -13,7 +14,7 @@ struct SettingsView: View {
             GeneralSettings(office: office)
                 .tabItem { Label("General", systemImage: "gearshape") }
             ClaudeSettings(source: source)
-                .tabItem { Label("Claude Code", systemImage: "point.3.connected.trianglepath.dotted") }
+                .tabItem { Label("Agents", systemImage: "point.3.connected.trianglepath.dotted") }
         }
         .frame(width: 460)
     }
@@ -78,11 +79,26 @@ private struct ClaudeSettings: View {
             }
 
             Section {
-                Button("Install hooks in all folders") {
+                if source.providerStatuses.isEmpty {
+                    Text("None detected — install Gemini CLI, Cursor or Codex and this list fills in by itself.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                ForEach(source.providerStatuses) { status in
+                    providerRow(status)
+                }
+            } header: {
+                Text("Other coding agents")
+            } footer: {
+                Text("Tools found on this Mac. Connect wires each one to the room through its own mechanism (hooks or notify), always after a timestamped backup of its config.")
+            }
+
+            Section {
+                Button("Connect everything") {
                     source.connect()
                 }
             } footer: {
-                Text("Adds Roster's event hooks to each folder's settings.json — a timestamped backup is written first. This is what unlocks the waiting, finished and error states.")
+                Text("Adds Roster's event wiring to every Claude Code folder and every detected tool — each config is backed up first. This is what unlocks the waiting, finished and error states.")
             }
         }
         .formStyle(.grouped)
@@ -94,6 +110,30 @@ private struct ClaudeSettings: View {
                 ClaudeConfigRoots.addExtra(url.path)
                 source.refresh()
             }
+        }
+    }
+
+    @ViewBuilder
+    private func providerRow(_ status: ClaudeCodeSource.ProviderStatus) -> some View {
+        let display = status.configPath.replacingOccurrences(
+            of: FileManager.default.homeDirectoryForCurrentUser.path,
+            with: "~"
+        )
+        HStack(spacing: 8) {
+            Image(status.kind.logoAssetName)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 16, height: 16)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: status.kind.displayName)
+                Text(verbatim: display)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(status.installed ? "Connected" : "Not connected")
+                .font(.caption)
+                .foregroundStyle(status.installed ? Color.green : Color.secondary)
         }
     }
 
