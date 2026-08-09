@@ -181,7 +181,7 @@ final class ClaudeCodeSource {
 
         // withAnimation so session arrivals/departures fade like the demo
         // ones (RoomView's insertion/removal transitions).
-        withAnimation(.easeOut(duration: 0.45)) {
+        _ = withAnimation(.easeOut(duration: 0.45)) {
             office.apply(event)
         }
         persistWorkstationsIfNeeded()
@@ -239,7 +239,7 @@ final class ClaudeCodeSource {
                         transcripts[key] = transcript
                         guard let cwd = Self.cwd(fromTranscript: transcript) else { continue }
                         // Idempotent: a session already in the room is a no-op.
-                        withAnimation(.easeOut(duration: 0.45)) {
+                        _ = withAnimation(.easeOut(duration: 0.45)) {
                             office.apply(.sessionStart(key: key, cwd: cwd))
                         }
                         found += 1
@@ -259,7 +259,7 @@ final class ClaudeCodeSource {
             if Date().timeIntervalSince(modified) > staleAfter {
                 log.info("session \(key, privacy: .public) stale; retiring")
                 endedAt[key] = Date()
-                withAnimation(.easeOut(duration: 0.45)) {
+                _ = withAnimation(.easeOut(duration: 0.45)) {
                     office.apply(.sessionEnd(key: key))
                 }
                 transcripts[key] = nil
