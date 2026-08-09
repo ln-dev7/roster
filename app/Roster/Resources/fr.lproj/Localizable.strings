@@ -59,9 +59,20 @@
 
 /* ── Menus ── */
 "Keep on Top" = "Toujours au premier plan";
+"Show Sidebar" = "Afficher la barre latérale";
 "Show Simulation Panel" = "Afficher le panneau de simulation";
 "Check for Updates…" = "Rechercher des mises à jour…";
 "Debug" = "Debug";
+
+/* ── Onboarding ── */
+"Welcome to Roster" = "Bienvenue dans Roster";
+"Your Claude Code sessions, as colleagues in a little office." = "Tes sessions Claude Code, comme des collègues dans un petit bureau.";
+"Sessions appear on their own — every desk is one of your projects. Close a session and its desk leaves with it." = "Les sessions apparaissent toutes seules — chaque poste est un de tes projets. Ferme une session et son poste part avec elle.";
+"An agent stands up when it needs you, and walks to your desk when it finishes real work." = "Un agent se lève quand il a besoin de toi, et traverse jusqu'à ton bureau quand il termine un vrai travail.";
+"Click an agent — or a sidebar row — for its last message and quick actions. Click the floor to dismiss." = "Clique un agent — ou une ligne de la barre latérale — pour voir son dernier message et les actions rapides. Clique le sol pour fermer.";
+"The arrow keys move your own avatar. Wander off; you'll sit back down when you return to your chair." = "Les flèches déplacent ton propre avatar. Balade-toi ; tu te rassoiras en revenant à ta chaise.";
+"Connect adds a small hook to each Claude Code settings.json (after a backup) — that's what unlocks the waiting, finished and failed states." = "Connecter ajoute un petit hook à chaque settings.json de Claude Code (après une sauvegarde) — c'est ce qui débloque les états attente, terminé et échec.";
+"Enter the office" = "Entrer dans le bureau";
 
 /* ── Room ── */
 "You" = "Toi";

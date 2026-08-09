@@ -23,6 +23,10 @@ struct RosterApp: App {
     /// window does. `@AppStorage` persists them across launches.
     @AppStorage("showSimulationPanel") private var showSimulationPanel = false
     @AppStorage("keepOnTop") private var keepOnTop = false
+    @AppStorage("showSidebar") private var showSidebar = true
+    /// Onboarding flag: false until the welcome card was dismissed once.
+    /// Help → "Welcome to Roster" simply flips it back.
+    @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
 
     init() {
         let office = Office()
@@ -53,10 +57,25 @@ struct RosterApp: App {
                 .disabled(!updater.canCheckForUpdates)
             }
 
+            // The sidebar toggle, in the View menu with the standard macOS
+            // shortcut (⌃⌘S, same as Finder or Mail).
+            CommandGroup(after: .sidebar) {
+                Toggle("Show Sidebar", isOn: $showSidebar)
+                    .keyboardShortcut("s", modifiers: [.command, .control])
+            }
+
             // Floating window level, in the View menu where it belongs.
             CommandGroup(after: .windowSize) {
                 Toggle("Keep on Top", isOn: $keepOnTop)
                     .keyboardShortcut("t", modifiers: [.command, .option])
+            }
+
+            // Help: reopen the welcome card instead of a help book nobody
+            // would read.
+            CommandGroup(replacing: .help) {
+                Button("Welcome to Roster") {
+                    hasSeenWelcome = false
+                }
             }
 
             // The simulation panel: our permanent GIF-recording studio,

@@ -17,6 +17,15 @@ struct ContentView: View {
     /// level, so the room stays visible in a corner while you work.
     @AppStorage("keepOnTop") private var keepOnTop = false
 
+    /// The sidebar toggle — View menu (⌃⌘S), and a button in the room's
+    /// corner. Deliberately NOT animated: the 3D layer repositions
+    /// instantly on layout changes, so the 2D room does too.
+    @AppStorage("showSidebar") private var showSidebar = true
+
+    /// False until the welcome card was dismissed once. Help → "Welcome
+    /// to Roster" flips it back to show the card again.
+    @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
+
     /// The selected session (room click, desk click or sidebar row — all
     /// the same value). Non-nil opens the detail card over the room; the
     /// card vanishes on ✕, on a floor click, or when the session ends —
@@ -30,39 +39,57 @@ struct ContentView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            SidebarView(office: office, source: source, selection: $selectedSessionID)
-            Divider()
-
-            VStack(spacing: 0) {
-                switch source.state {
-                case .notConnected:
-                    ConnectBanner(source: source)
-                case .failed(let message):
-                    ErrorBanner(message: message, source: source)
-                case .checking, .connected:
-                    EmptyView()
+        ZStack {
+            HStack(spacing: 0) {
+                if showSidebar {
+                    SidebarView(office: office, source: source, selection: $selectedSessionID)
+                    Divider()
                 }
 
-                // The room, with the Gather-style detail card floating
-                // over its right edge when an agent is selected.
-                ZStack(alignment: .topTrailing) {
-                    RoomView(office: office, selection: $selectedSessionID)
+                VStack(spacing: 0) {
+                    switch source.state {
+                    case .notConnected:
+                        ConnectBanner(source: source)
+                    case .failed(let message):
+                        ErrorBanner(message: message, source: source)
+                    case .checking, .connected:
+                        EmptyView()
+                    }
 
-                    if let id = selectedSessionID, let session = office.session(id) {
-                        DetailCard(office: office, session: session) {
-                            selectedSessionID = nil
+                    // The room, with the Gather-style detail card floating
+                    // over its right edge when an agent is selected.
+                    ZStack(alignment: .topTrailing) {
+                        RoomView(office: office, selection: $selectedSessionID)
+
+                        if let id = selectedSessionID, let session = office.session(id) {
+                            DetailCard(office: office, session: session) {
+                                selectedSessionID = nil
+                            }
+                            .padding(12)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
                         }
-                        .padding(12)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
+                    .animation(.easeOut(duration: 0.22), value: selectedSessionID)
+                    .overlay(alignment: .bottomLeading) {
+                        SidebarToggle(showSidebar: $showSidebar)
+                            .padding(10)
+                    }
+
+                    if isPanelVisible {
+                        Divider()
+                        SimulationPanel(office: office)
                     }
                 }
-                .animation(.easeOut(duration: 0.22), value: selectedSessionID)
+            }
 
-                if isPanelVisible {
-                    Divider()
-                    SimulationPanel(office: office)
+            // First launch: the welcome card, over everything.
+            if !hasSeenWelcome {
+                OnboardingView {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        hasSeenWelcome = true
+                    }
                 }
+                .transition(.opacity)
             }
         }
         // Below this the room becomes hard to read; the window is free to
@@ -100,6 +127,29 @@ struct ContentView: View {
         .onChange(of: keepOnTop) {
             WindowLevel.apply(keepOnTop: keepOnTop)
         }
+    }
+}
+
+/// The little sidebar button in the room's corner — the same toggle as
+/// View → Show Sidebar (⌃⌘S), for mouse people.
+private struct SidebarToggle: View {
+
+    @Binding var showSidebar: Bool
+
+    var body: some View {
+        Button {
+            showSidebar.toggle()
+        } label: {
+            Image(systemName: "sidebar.left")
+                .font(.caption.weight(.semibold))
+                .frame(width: 24, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Show Sidebar")
+        .padding(3)
+        .background(.regularMaterial, in: Capsule())
+        .shadow(color: .black.opacity(0.2), radius: 3, y: 1)
     }
 }
 
