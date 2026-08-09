@@ -161,6 +161,9 @@ export default async function HomePage({
 
               <figcaption className="mt-4 text-center font-mono text-xs text-muted-foreground/70">
                 {t("hero.caption")}
+                <span className="mt-1.5 block text-primary/80">
+                  {t("hero.hint")}
+                </span>
               </figcaption>
             </figure>
           </FadeIn>

@@ -3,51 +3,43 @@
 import { useEffect, useRef } from "react"
 
 /**
- * The product moment, rendered live: the pixel office from the macOS app,
- * with the app's ACTUAL movement rules —
+ * The product moment, rendered live — and playable.
  *
- *   • people walk at constant speed (easing curves are for furniture);
- *   • they face where they're going: front coming toward you, BACK when
- *     they leave, profile when they cross the room sideways;
- *   • legs actually walk (two frames, like the app's swing);
- *   • seated means seated — compact, on the chair.
+ * Two agents take turns doing the finished-work crossing: dockkeep works,
+ * finishes, walks to your desk, waits for review, walks back and sits;
+ * then circle does the same; repeat. You sit at your desk the whole time,
+ * like in real life — UNLESS the visitor presses W-A-S-D (physical keys,
+ * so Z-Q-S-D on an AZERTY keyboard): then your avatar walks around the
+ * office, exactly like the app's movement. Release the keys near your
+ * chair and you sit back down.
  *
- * Two loops run at once: dockkeep does the finished-work crossing to your
- * desk and back, and YOUR avatar wanders to the ping-pong table and
- * returns — the arrow-keys feature, demoed. Same geometry (×2.5), same
- * palette, same timings as the app, so the site never oversells.
+ * Movement rules mirror the app: constant speed (people walk, they don't
+ * glide), characters face where they're going — back of the head on the
+ * way out — and legs actually alternate. Same geometry (×2.5), palette
+ * and timings as the app, so the site never oversells.
  */
 
-// ── Timelines ────────────────────────────────────────────────────────────
+// ── The walkers' shared timeline ─────────────────────────────────────────
 
-const WALKER_PHASES: Array<[name: string, duration: number]> = [
-  ["work", 2600],
+const WALK_PHASES: Array<[name: string, duration: number]> = [
+  ["work", 2000],
   ["stand", 450],
   ["walk", 2900],
   ["desk", 2600],
   ["back", 2900],
   ["sit", 450],
 ]
-
-const YOU_PHASES: Array<[name: string, duration: number]> = [
-  ["sit", 4200],
-  ["out", 2600],
-  ["pause", 2000],
-  ["home", 2600],
-  ["settle", 500],
-]
-
-const sum = (phases: Array<[string, number]>) =>
-  phases.reduce((total, [, duration]) => total + duration, 0)
-const WALKER_TOTAL = sum(WALKER_PHASES)
-const YOU_TOTAL = sum(YOU_PHASES)
+const WALK_TOTAL = WALK_PHASES.reduce((total, [, d]) => total + d, 0)
+/** dockkeep goes first, then circle — one full crossing each. */
+const CYCLE = WALK_TOTAL * 2
 
 // Waypoints in the 960×550 design space (app logical coords × 2.5).
-const SEAT = { x: 480, y: 190 }
-const STAND = { x: 515, y: 195 }
+const DK_SEAT = { x: 480, y: 190 }
+const DK_STAND = { x: 515, y: 195 }
+const C_SEAT = { x: 250, y: 190 }
+const C_STAND = { x: 285, y: 195 }
 const DESK = { x: 480, y: 390 }
 const YOU_SEAT = { x: 480, y: 465 }
-const PONG = { x: 152, y: 452 }
 
 // The app's status colors (SessionStatus.uiColor).
 const STATUS = {
@@ -100,19 +92,6 @@ const P = {
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 const easeInOut = (t: number) =>
   t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
-
-function phaseAt(
-  ms: number,
-  phases: Array<[string, number]>,
-  total: number
-): [string, number] {
-  let t = ms % total
-  for (const [name, duration] of phases) {
-    if (t < duration) return [name, t / duration]
-    t -= duration
-  }
-  return [phases[0][0], 0]
-}
 
 /** Darkens (f < 1) or lightens (f > 1) a #rrggbb color — the fake light. */
 function shade(hex: string, f: number): string {
@@ -311,7 +290,7 @@ function Pod({ x, screen }: { x: number; screen: "breathing" | "off" }) {
   )
 }
 
-// ── The room ─────────────────────────────────────────────────────────────
+// ── The cast ─────────────────────────────────────────────────────────────
 
 const CIRCLE_LOOK: Look = {
   skin: "#f2c9a0",
@@ -368,11 +347,46 @@ function Variants({
   )
 }
 
+const WALKER_VARIANTS = [
+  { name: "seated", pose: "seated" },
+  { name: "stand", pose: "stand" },
+  { name: "wf0", pose: "walk", facing: "front", frame: 0 },
+  { name: "wf1", pose: "walk", facing: "front", frame: 1 },
+  { name: "wb0", pose: "walk", facing: "back", frame: 0 },
+  { name: "wb1", pose: "walk", facing: "back", frame: 1 },
+] as const
+
+const YOU_VARIANTS = [
+  { name: "seated", pose: "seated" },
+  { name: "stand", pose: "stand" },
+  { name: "f0", pose: "walk", facing: "front", frame: 0 },
+  { name: "f1", pose: "walk", facing: "front", frame: 1 },
+  { name: "b0", pose: "walk", facing: "back", frame: 0 },
+  { name: "b1", pose: "walk", facing: "back", frame: 1 },
+  { name: "l0", pose: "walk", facing: "left", frame: 0 },
+  { name: "l1", pose: "walk", facing: "left", frame: 1 },
+  { name: "r0", pose: "walk", facing: "right", frame: 0 },
+  { name: "r1", pose: "walk", facing: "right", frame: 1 },
+] as const
+
+function isTypingTarget(target: EventTarget | null) {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable ||
+      target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.tagName === "SELECT")
+  )
+}
+
 export function HeroRoom() {
-  const walkerRef = useRef<SVGGElement>(null)
+  const dkRef = useRef<SVGGElement>(null)
+  const dkDotRef = useRef<SVGCircleElement>(null)
+  const dkGlowRef = useRef<SVGCircleElement>(null)
+  const cRef = useRef<SVGGElement>(null)
+  const cDotRef = useRef<SVGCircleElement>(null)
+  const cGlowRef = useRef<SVGCircleElement>(null)
   const youRef = useRef<SVGGElement>(null)
-  const dotRef = useRef<SVGCircleElement>(null)
-  const glowRef = useRef<SVGCircleElement>(null)
 
   useEffect(() => {
     // Frozen room for users who prefer reduced motion.
@@ -384,89 +398,161 @@ export function HeroRoom() {
       })
     }
 
-    let raf = 0
-    const frame = (now: number) => {
-      const gait = (Math.floor(now / 140) % 2) as 0 | 1
+    // ── Your avatar: W-A-S-D by PHYSICAL position (e.code), so it's
+    // Z-Q-S-D on an AZERTY keyboard, same spot under the fingers. ──
+    const you = {
+      x: YOU_SEAT.x,
+      y: YOU_SEAT.y,
+      keys: new Set<string>(),
+    }
+    const MOVE_CODES = ["KeyW", "KeyA", "KeyS", "KeyD"]
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      if (isTypingTarget(event.target)) return
+      if (!MOVE_CODES.includes(event.code)) return
+      you.keys.add(event.code)
+    }
+    const onKeyUp = (event: KeyboardEvent) => {
+      you.keys.delete(event.code)
+    }
+    const onBlur = () => you.keys.clear()
+    window.addEventListener("keydown", onKeyDown)
+    window.addEventListener("keyup", onKeyUp)
+    window.addEventListener("blur", onBlur)
 
-      // ── dockkeep: the finished-work crossing ──
-      {
-        const [name, t] = phaseAt(now, WALKER_PHASES, WALKER_TOTAL)
-        let x = SEAT.x
-        let y = SEAT.y
-        let glow = 0
-        let dot = STATUS.working
-        let variant = "seated"
+    /** One walker's whole life, from its timeline slice. t < 0 = off
+     *  duty: seated at its desk, working. */
+    const drive = (
+      root: SVGGElement | null,
+      dot: SVGCircleElement | null,
+      glow: SVGCircleElement | null,
+      seat: { x: number; y: number },
+      standSpot: { x: number; y: number },
+      t: number,
+      gait: 0 | 1
+    ) => {
+      let x = seat.x
+      let y = seat.y
+      let glowOpacity = 0
+      let dotColor = STATUS.working
+      let variant = "seated"
+      if (t >= 0) {
+        let remaining = t
+        let name = "work"
+        let progress = 0
+        for (const [phase, duration] of WALK_PHASES) {
+          if (remaining < duration) {
+            name = phase
+            progress = remaining / duration
+            break
+          }
+          remaining -= duration
+        }
         if (name === "stand") {
-          x = lerp(SEAT.x, STAND.x, easeInOut(t))
-          y = lerp(SEAT.y, STAND.y, easeInOut(t))
+          x = lerp(seat.x, standSpot.x, easeInOut(progress))
+          y = lerp(seat.y, standSpot.y, easeInOut(progress))
           variant = "stand"
-          dot = STATUS.finished
+          dotColor = STATUS.finished
         } else if (name === "walk") {
           // Constant speed, like the app: people walk, they don't glide.
-          x = lerp(STAND.x, DESK.x, t)
-          y = lerp(STAND.y, DESK.y, t)
+          x = lerp(standSpot.x, DESK.x, progress)
+          y = lerp(standSpot.y, DESK.y, progress)
           variant = `wf${gait}`
-          dot = STATUS.finished
+          dotColor = STATUS.finished
         } else if (name === "desk") {
           x = DESK.x
           y = DESK.y
-          glow = 0.22
+          glowOpacity = 0.22
           variant = "stand"
-          dot = STATUS.finished
+          dotColor = STATUS.finished
         } else if (name === "back") {
-          // Walking away — you see the back of the head, like in the app.
-          x = lerp(DESK.x, STAND.x, t)
-          y = lerp(DESK.y, STAND.y, t)
+          // Walking away — you see the back of the head.
+          x = lerp(DESK.x, standSpot.x, progress)
+          y = lerp(DESK.y, standSpot.y, progress)
           variant = `wb${gait}`
         } else if (name === "sit") {
-          x = lerp(STAND.x, SEAT.x, easeInOut(t))
-          y = lerp(STAND.y, SEAT.y, easeInOut(t))
+          x = lerp(standSpot.x, seat.x, easeInOut(progress))
+          y = lerp(standSpot.y, seat.y, easeInOut(progress))
           variant = "stand"
         }
-        walkerRef.current?.setAttribute("transform", `translate(${x},${y})`)
-        setVariant(walkerRef.current, variant)
-        dotRef.current?.setAttribute("fill", dot)
-        glowRef.current?.setAttribute("opacity", String(glow))
       }
+      root?.setAttribute("transform", `translate(${x},${y})`)
+      setVariant(root, variant)
+      dot?.setAttribute("fill", dotColor)
+      glow?.setAttribute("opacity", String(glowOpacity))
+    }
 
-      // ── you: a stroll to the ping-pong table (the arrow keys, demoed) ──
+    let raf = 0
+    let lastNow = 0
+    const frame = (now: number) => {
+      const gait = (Math.floor(now / 140) % 2) as 0 | 1
+      const dt = lastNow ? Math.min((now - lastNow) / 1000, 0.05) : 0
+      lastNow = now
+
+      // ── The two walkers take turns: dockkeep, then circle. ──
+      const cycleT = now % CYCLE
+      drive(
+        dkRef.current, dkDotRef.current, dkGlowRef.current,
+        DK_SEAT, DK_STAND,
+        cycleT < WALK_TOTAL ? cycleT : -1,
+        gait
+      )
+      drive(
+        cRef.current, cDotRef.current, cGlowRef.current,
+        C_SEAT, C_STAND,
+        cycleT >= WALK_TOTAL ? cycleT - WALK_TOTAL : -1,
+        gait
+      )
+
+      // ── You: driven by the visitor's keys, or peacefully seated. ──
       {
-        const [name, t] = phaseAt(now, YOU_PHASES, YOU_TOTAL)
-        let x = YOU_SEAT.x
-        let y = YOU_SEAT.y
-        let variant = "seated"
-        if (name === "out") {
-          x = lerp(YOU_SEAT.x, PONG.x, t)
-          y = lerp(YOU_SEAT.y, PONG.y, t)
-          variant = `yl${gait}`
-        } else if (name === "pause") {
-          x = PONG.x
-          y = PONG.y
-          variant = "stand"
-        } else if (name === "home") {
-          x = lerp(PONG.x, YOU_SEAT.x, t)
-          y = lerp(PONG.y, YOU_SEAT.y, t)
-          variant = `yr${gait}`
-        } else if (name === "settle") {
-          x = YOU_SEAT.x
-          y = YOU_SEAT.y
+        const left = you.keys.has("KeyA") ? 1 : 0
+        const right = you.keys.has("KeyD") ? 1 : 0
+        const up = you.keys.has("KeyW") ? 1 : 0
+        const down = you.keys.has("KeyS") ? 1 : 0
+        const dx = right - left
+        const dy = down - up
+        let variant: string
+        if (dx !== 0 || dy !== 0) {
+          const length = Math.hypot(dx, dy)
+          const speed = 155 // design px/s — the app's 62 logical px/s
+          you.x = Math.min(Math.max(you.x + (dx / length) * speed * dt, 20), 940)
+          you.y = Math.min(Math.max(you.y + (dy / length) * speed * dt, 68), 532)
+          const facing =
+            Math.abs(dx) >= Math.abs(dy)
+              ? dx < 0 ? "l" : "r"
+              : dy < 0 ? "b" : "f"
+          variant = `${facing}${gait}`
+        } else if (
+          Math.hypot(you.x - YOU_SEAT.x, you.y - YOU_SEAT.y) < 16
+        ) {
+          // Close enough to the chair: sit back down, like the app.
+          you.x = YOU_SEAT.x
+          you.y = YOU_SEAT.y
+          variant = "seated"
+        } else {
           variant = "stand"
         }
-        youRef.current?.setAttribute("transform", `translate(${x},${y})`)
+        youRef.current?.setAttribute("transform", `translate(${you.x},${you.y})`)
         setVariant(youRef.current, variant)
       }
 
       raf = requestAnimationFrame(frame)
     }
     raf = requestAnimationFrame(frame)
-    return () => cancelAnimationFrame(raf)
+    return () => {
+      cancelAnimationFrame(raf)
+      window.removeEventListener("keydown", onKeyDown)
+      window.removeEventListener("keyup", onKeyUp)
+      window.removeEventListener("blur", onBlur)
+    }
   }, [])
 
   return (
     <svg
       viewBox="0 0 960 550"
       role="img"
-      aria-label="Pixel office where an agent walks from its desk to yours while your avatar strolls to the ping-pong table"
+      aria-label="Pixel office where agents take turns walking to your desk; the W, A, S and D keys move your avatar"
       className="block h-auto w-full"
       style={{ background: P.floorB }}
     >
@@ -551,16 +637,6 @@ export function HeroRoom() {
         <Plant x={40} y={370} />
       </g>
 
-      {/* ── The cast ── */}
-
-      {/* circle — seated, working */}
-      <g transform="translate(250,190)">
-        <Body look={CIRCLE_LOOK} pose="seated" />
-        <g transform="translate(0,-58)">
-          <Pill name="circle" color={STATUS.working} />
-        </g>
-      </g>
-
       {/* blog — standing beside its chair, needs input */}
       <g transform="translate(745,195)">
         <circle
@@ -578,42 +654,29 @@ export function HeroRoom() {
         </g>
       </g>
 
-      {/* you — seated at your desk, until you go stretch your legs */}
+      {/* circle — walker #2, takes its turn after dockkeep */}
+      <g ref={cRef} transform="translate(250,190)">
+        <circle ref={cGlowRef} cy="-21" r="30" fill={STATUS.finished} opacity="0" />
+        <Variants look={CIRCLE_LOOK} initial="seated" variants={[...WALKER_VARIANTS]} />
+        <g transform="translate(0,-58)">
+          <Pill name="circle" color={STATUS.working} dotRef={cDotRef} />
+        </g>
+      </g>
+
+      {/* you — at your desk; the visitor's W-A-S-D takes you for a walk */}
       <g ref={youRef} transform="translate(480,465)">
-        <Variants
-          look={YOU_LOOK}
-          initial="seated"
-          variants={[
-            { name: "seated", pose: "seated" },
-            { name: "stand", pose: "stand" },
-            { name: "yl0", pose: "walk", facing: "left", frame: 0 },
-            { name: "yl1", pose: "walk", facing: "left", frame: 1 },
-            { name: "yr0", pose: "walk", facing: "right", frame: 0 },
-            { name: "yr1", pose: "walk", facing: "right", frame: 1 },
-          ]}
-        />
+        <Variants look={YOU_LOOK} initial="seated" variants={[...YOU_VARIANTS]} />
         <g transform="translate(0,-58)">
           <Pill name="You" color="#8a8f98" />
         </g>
       </g>
 
-      {/* dockkeep — the walker, driven frame by frame */}
-      <g ref={walkerRef} transform="translate(480,190)">
-        <circle ref={glowRef} cy="-21" r="30" fill={STATUS.finished} opacity="0" />
-        <Variants
-          look={WALKER_LOOK}
-          initial="seated"
-          variants={[
-            { name: "seated", pose: "seated" },
-            { name: "stand", pose: "stand" },
-            { name: "wf0", pose: "walk", facing: "front", frame: 0 },
-            { name: "wf1", pose: "walk", facing: "front", frame: 1 },
-            { name: "wb0", pose: "walk", facing: "back", frame: 0 },
-            { name: "wb1", pose: "walk", facing: "back", frame: 1 },
-          ]}
-        />
+      {/* dockkeep — walker #1 */}
+      <g ref={dkRef} transform="translate(480,190)">
+        <circle ref={dkGlowRef} cy="-21" r="30" fill={STATUS.finished} opacity="0" />
+        <Variants look={WALKER_LOOK} initial="seated" variants={[...WALKER_VARIANTS]} />
         <g transform="translate(0,-58)">
-          <Pill name="dockkeep" color={STATUS.working} dotRef={dotRef} />
+          <Pill name="dockkeep" color={STATUS.working} dotRef={dkDotRef} />
         </g>
       </g>
     </svg>

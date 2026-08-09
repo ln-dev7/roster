@@ -47,7 +47,10 @@ function ThemeHotkey() {
         return
       }
 
-      if (event.key.toLowerCase() !== "d") {
+      // "t" for theme — "d" now belongs to the hero demo's W-A-S-D
+      // movement (D walks right; toggling dark mode mid-step would be
+      // a strange way to walk).
+      if (event.key.toLowerCase() !== "t") {
         return
       }
 

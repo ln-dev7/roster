@@ -17,8 +17,9 @@
     "download": "Télécharger pour macOS",
     "github": "Voir sur GitHub",
     "note": "macOS 14+ · Signé & notarisé · Sans compte, sans télémétrie",
-    "caption": "En direct de la pièce — dockkeep vient de finir et traverse vers ton bureau.",
-    "you": "Toi"
+    "caption": "En direct de la pièce — les agents viennent te voir chacun leur tour quand ils terminent.",
+    "you": "Toi",
+    "hint": "Psst : W·A·S·D déplace ton avatar (mêmes touches physiques — Z·Q·S·D en AZERTY). T change le thème."
   },
   "ticker": {
     "t1": "dockkeep a terminé — il t'attend à ton bureau",
@@ -26,7 +27,7 @@
     "t3": "blog s'est levé — il attend ta réponse",
     "t4": "api a raté son dernier tour",
     "t5": "tu es parti traîner à la table de ping-pong",
-    "t6": "deux agents partagent le bureau circle"
+    "t6": "circle · 2 vient de s'installer à son propre bureau"
   },
   "positioning": {
     "title": "Pas un dashboard de plus.",

@@ -17,8 +17,9 @@
     "download": "Download for macOS",
     "github": "View on GitHub",
     "note": "macOS 14+ · Signed & notarized · No account, no telemetry",
-    "caption": "Live from the room — dockkeep just finished and is crossing over to your desk.",
-    "you": "You"
+    "caption": "Live from the room — the agents take turns walking over when they finish.",
+    "you": "You",
+    "hint": "Psst: W·A·S·D moves your avatar (same keys, whatever the layout — Z·Q·S·D on AZERTY). T toggles the theme."
   },
   "ticker": {
     "t1": "dockkeep finished — waiting at your desk",
@@ -26,7 +27,7 @@
     "t3": "blog stood up — it needs your input",
     "t4": "api failed its last turn",
     "t5": "you wandered off to the ping-pong table",
-    "t6": "two agents are sharing the circle desk"
+    "t6": "circle · 2 just sat down at its own desk"
   },
   "positioning": {
     "title": "Not another dashboard.",
