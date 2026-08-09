@@ -51,7 +51,10 @@ struct Workstation: Identifiable, Equatable {
 struct AgentSession: Identifiable, Equatable {
     let id: Int
     /// Index into `Office.workstations` — the project this agent works on.
-    let stationIndex: Int
+    /// `var`, not `let`: when a desk earlier in the row dies with its last
+    /// session, everyone past it shifts down one index (see
+    /// `removeWorkstation(at:)`).
+    var stationIndex: Int
     var status: SessionStatus = .working
     var phase: AgentPhase = .seated
     /// 0 or 1 — two agents can share one station.
