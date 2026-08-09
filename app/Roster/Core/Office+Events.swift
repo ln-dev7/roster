@@ -31,6 +31,12 @@ extension Office {
             needsInput(id)
             return nil
 
+        case .completed(let key, let cwd):
+            // Claude Code's own "agent completed" signal: no duration rule,
+            // the walk is explicitly earned.
+            guard let id = ensureSession(key: key, cwd: cwd) else { return nil }
+            return finish(id)
+
         case .stopped(let key, let cwd, let summary):
             guard let id = ensureSession(key: key, cwd: cwd) else { return nil }
             if let summary, !summary.isEmpty {

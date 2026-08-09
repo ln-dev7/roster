@@ -1,18 +1,29 @@
 import XCTest
 
 /// The settings merge — the one place Roster writes into a file it does not
-/// own, so it gets the paranoid treatment: additive, idempotent, and
-/// everything foreign preserved bit for bit.
+/// own, so it gets the paranoid treatment: additive for foreign content,
+/// self-healing for our own entries, idempotent, and corrupt files are
+/// never touched.
 final class HookInstallerTests: XCTestCase {
 
-    func testMergingEmptySettingsAddsAllSixEvents() {
+    func testMergingEmptySettingsInstallsTheFullSet() {
         let merged = HookInstaller.merged([:])
+        XCTAssertTrue(HookInstaller.isInstalled(in: merged))
+
         let hooks = merged["hooks"] as? [String: Any]
-        XCTAssertNotNil(hooks)
-        for name in HookInstaller.eventNames {
-            XCTAssertTrue(HookInstaller.isInstalled(in: merged),
-                          "missing marker after merge")
+        for name in HookInstaller.plainEvents {
             XCTAssertNotNil(hooks?[name], "no entry for \(name)")
+        }
+
+        // One Notification entry per matcher, each tagging its own type.
+        let notification = hooks?["Notification"] as? [[String: Any]]
+        XCTAssertEqual(notification?.count, HookInstaller.notificationMatchers.count)
+        for entry in notification ?? [] {
+            let matcher = entry["matcher"] as? String ?? ""
+            let command = ((entry["hooks"] as? [[String: Any]])?.first?["command"]) as? String ?? ""
+            XCTAssertTrue(command.contains("roster_matcher\\\":\\\"\(matcher)")
+                          || command.contains("roster_matcher\":\"\(matcher)"),
+                          "command for \(matcher) must tag its matcher")
         }
     }
 
@@ -46,17 +57,25 @@ final class HookInstallerTests: XCTestCase {
                       "installing twice must change nothing")
     }
 
-    func testIsInstalledDetection() {
-        XCTAssertFalse(HookInstaller.isInstalled(in: [:]))
-        XCTAssertTrue(HookInstaller.isInstalled(in: HookInstaller.merged([:])))
+    func testOldRosterEntriesAreReplacedNotDuplicated() {
+        // Simulate a v1 install: a spool command without the version tag,
+        // registered under an event we no longer use that way.
+        let v1: [String: Any] = [
+            "hooks": [
+                "Notification": [
+                    ["hooks": [["type": "command",
+                                "command": "cat >> $HOME/Library/Application Support/Roster/events.jsonl"]]]
+                ]
+            ]
+        ]
+        XCTAssertFalse(HookInstaller.isInstalled(in: v1), "v1 must read as outdated")
 
-        // Partial installs (a user removed one event) count as not
-        // installed, so a reinstall completes the set.
-        var partial = HookInstaller.merged([:])
-        var hooks = partial["hooks"] as? [String: Any]
-        hooks?["Stop"] = nil
-        partial["hooks"] = hooks as Any
-        XCTAssertFalse(HookInstaller.isInstalled(in: partial))
+        let merged = HookInstaller.merged(v1)
+        XCTAssertTrue(HookInstaller.isInstalled(in: merged))
+
+        // The untagged v1 entry is gone; only the per-matcher set remains.
+        let notification = (merged["hooks"] as? [String: Any])?["Notification"] as? [[String: Any]]
+        XCTAssertEqual(notification?.count, HookInstaller.notificationMatchers.count)
     }
 
     func testInstallOnDiskBacksUpAndWrites() throws {

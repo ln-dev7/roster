@@ -117,6 +117,15 @@ final class OfficeEventTests: XCTestCase {
         XCTAssertEqual(office.sessions[0].phase, .seated)
     }
 
+    func testAgentCompletedNotificationWalksWithoutTheDurationRule() async {
+        office.apply(.sessionStart(key: "s1", cwd: "/repo/circle"))
+        // No prompt, no time advance: the explicit signal is enough.
+        await office.apply(.completed(key: "s1", cwd: nil))?.value
+
+        XCTAssertEqual(office.sessions[0].status, .finished)
+        XCTAssertEqual(office.sessions[0].phase, .atDesk)
+    }
+
     // MARK: Failures and endings
 
     func testStopFailureMarksTheAgent() {
@@ -154,12 +163,30 @@ final class ClaudeEventParsingTests: XCTestCase {
     }
 
     func testOnlyRelevantNotificationTypesPass() {
-        let relevant = #"{"hook_event_name":"Notification","session_id":"abc","cwd":"/r","notification_type":"agent_needs_input","message":"…"}"#
-        XCTAssertEqual(ClaudeEvent(jsonLine: relevant),
+        // The tag injected by our own sed hook.
+        let tagged = #"{"roster_matcher":"agent_needs_input","hook_event_name":"Notification","session_id":"abc","cwd":"/r"}"#
+        XCTAssertEqual(ClaudeEvent(jsonLine: tagged),
                        .needsInput(key: "abc", cwd: "/r"))
+
+        // Fallback on a native notification_type field, if one exists.
+        let native = #"{"hook_event_name":"Notification","session_id":"abc","cwd":"/r","notification_type":"permission_prompt"}"#
+        XCTAssertEqual(ClaudeEvent(jsonLine: native),
+                       .needsInput(key: "abc", cwd: "/r"))
+
+        // Claude Code's own completion signal maps to the walk.
+        let completed = #"{"roster_matcher":"agent_completed","hook_event_name":"Notification","session_id":"abc","cwd":"/r"}"#
+        XCTAssertEqual(ClaudeEvent(jsonLine: completed),
+                       .completed(key: "abc", cwd: "/r"))
 
         let irrelevant = #"{"hook_event_name":"Notification","session_id":"abc","notification_type":"auth_success"}"#
         XCTAssertNil(ClaudeEvent(jsonLine: irrelevant))
+    }
+
+    func testTranscriptPathExtraction() {
+        let line = #"{"hook_event_name":"Stop","session_id":"abc","transcript_path":"/Users/x/.claude/projects/-repo/abc.jsonl"}"#
+        let extracted = ClaudeEvent.transcriptPath(fromJSONLine: line)
+        XCTAssertEqual(extracted?.key, "abc")
+        XCTAssertEqual(extracted?.path, "/Users/x/.claude/projects/-repo/abc.jsonl")
     }
 
     func testGarbageAndUnknownEventsAreIgnored() {
