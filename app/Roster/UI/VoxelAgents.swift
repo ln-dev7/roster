@@ -230,7 +230,10 @@ struct VoxelSceneView: NSViewRepresentable {
                 var lastTick = ContinuousClock.now
                 while !Task.isCancelled {
                     guard let self, !self.routes.isEmpty else { break }
-                    try? await Task.sleep(for: .milliseconds(16))
+                    // Tight tolerance keeps the tick regular — irregular
+                    // steps read as juddery walking.
+                    try? await Task.sleep(for: .milliseconds(16),
+                                          tolerance: .milliseconds(2))
                     let now = ContinuousClock.now
                     let elapsed = lastTick.duration(to: now)
                     lastTick = now

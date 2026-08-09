@@ -39,9 +39,10 @@ struct RoomView: View {
 
     @Environment(\.colorScheme) private var colorScheme
 
-    /// Zoom factor on top of scale-to-fit. Values below 1 would only add
-    /// empty margins around the scene, so the range starts at 1.
-    @State private var zoom: CGFloat = 1
+    /// Zoom factor on top of the big plan. Defaults to the wide view —
+    /// the whole office at a glance; zoom in when you want to be IN it.
+    @State private var zoom: CGFloat = RoomView.defaultZoom
+    static let defaultZoom: CGFloat = 0.6
 
     // ── Your character ──────────────────────────────────────────────────
     @State private var youFeet: CGPoint = RoomPlan.youSeat
@@ -91,10 +92,12 @@ struct RoomView: View {
                  contentSize: content, palette: palette)
                 .frame(width: content.width, height: content.height)
                 // The whole camera in two lines: place the map so that
-                // your feet land on the viewport's center.
+                // your feet land on the viewport's center. Rounded to
+                // WHOLE pixels — subpixel positions make pixel art
+                // shimmer while it slides.
                 .position(
-                    x: geo.size.width / 2 + (content.width / 2 - youFeet.x * scale),
-                    y: geo.size.height / 2 + (content.height / 2 - youFeet.y * scale)
+                    x: (geo.size.width / 2 + (content.width / 2 - youFeet.x * scale)).rounded(),
+                    y: (geo.size.height / 2 + (content.height / 2 - youFeet.y * scale)).rounded()
                 )
         }
         .background(palette.outside)
@@ -277,12 +280,13 @@ struct RoomView: View {
             .frame(width: contentSize.width, height: contentSize.height)
             .allowsHitTesting(false)
 
-            // Your name pill, floating above your head. The tiny linear
-            // animation makes it trail the body by a breath — game-style.
+            // Your name pill, floating above your head. NO trailing
+            // animation: the camera pins you to the screen's center, so a
+            // lagging pill would visibly wobble around your head with
+            // every step — that was the "creak" during held-key walks.
             NamePill(name: String(localized: "You"), color: Color(hex: 0x8A8F98))
                 .position(x: map(youFeet).x,
                           y: map(youFeet).y - VoxelBuilder.figureSize.height * scale - 12)
-                .animation(.linear(duration: 0.1), value: youFeet)
                 .allowsHitTesting(false)
 
             // Each desk wears its provider's badge — the little logo of
@@ -422,7 +426,10 @@ struct RoomView: View {
         walkLoop = Task { @MainActor in
             var lastTick = ContinuousClock.now
             while !Task.isCancelled, !pressedArrows.isEmpty {
-                try? await Task.sleep(for: .milliseconds(16))
+                // Tight tolerance: the default lets the scheduler coalesce
+                // sleeps, and an irregular tick reads as juddery walking.
+                try? await Task.sleep(for: .milliseconds(16),
+                                      tolerance: .milliseconds(2))
                 let now = ContinuousClock.now
                 let elapsed = lastTick.duration(to: now)
                 lastTick = now
@@ -491,7 +498,8 @@ struct RoomView: View {
             var lastTick = ContinuousClock.now
             let speed: CGFloat = 130 // in a hurry — roughly twice the stroll
             while !Task.isCancelled, pressedArrows.isEmpty {
-                try? await Task.sleep(for: .milliseconds(16))
+                try? await Task.sleep(for: .milliseconds(16),
+                                      tolerance: .milliseconds(2))
                 let now = ContinuousClock.now
                 let elapsed = lastTick.duration(to: now)
                 lastTick = now
@@ -619,7 +627,7 @@ private struct ZoomControls: View {
                 zoom = max(range.lowerBound, zoom / step)
             }
             Button {
-                zoom = 1 // back to the big plan, not to fit-the-window
+                zoom = RoomView.defaultZoom // back to the wide view
             } label: {
                 Text(verbatim: "\(Int((zoom * 100).rounded()))%")
                     .font(.caption.monospacedDigit())
