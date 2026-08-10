@@ -291,6 +291,8 @@ final class ClaudeCodeSource {
                 }
             }
         }
+        found += scanCodexRollouts()
+
         if found > 0 {
             log.info("transcript scan: \(found) live session(s) across \(self.roots.count) root(s)")
         }
@@ -328,6 +330,83 @@ final class ClaudeCodeSource {
         for (key, date) in endedAt where Date().timeIntervalSince(date) > aliveWindow {
             endedAt[key] = nil
         }
+    }
+
+    /// Codex presence. The CLI's notify only speaks at end-of-turn, so a
+    /// running Codex agent would stay invisible until its first turn
+    /// completed. But Codex also writes a rollout transcript per session
+    /// (~/.codex/sessions/YYYY/MM/DD/rollout-….jsonl) whose FIRST line —
+    /// `session_meta` — carries the session id and cwd. Same contract as
+    /// the Claude scan: undocumented layout, so this only ever adds a
+    /// working session (the mtime sweep retires quiet ones), and any
+    /// format surprise silently yields nothing. The id matches notify's
+    /// thread-id, so the desk this creates is the SAME session the
+    /// end-of-turn events later enrich.
+    private func scanCodexRollouts() -> Int {
+        guard CodexInstaller.toolDetected else { return 0 }
+        let fm = FileManager.default
+        let sessionsDir = fm.homeDirectoryForCurrentUser
+            .appending(path: ".codex/sessions")
+        // Date-nested dirs, a few stats per file — cheap at 30 s cadence.
+        guard let enumerator = fm.enumerator(
+            at: sessionsDir,
+            includingPropertiesForKeys: [.contentModificationDateKey]
+        ) else { return 0 }
+
+        var found = 0
+        for case let url as URL in enumerator where url.pathExtension == "jsonl" {
+            guard let modified = modificationDate(of: url),
+                  Date().timeIntervalSince(modified) < aliveWindow,
+                  let meta = Self.codexMeta(fromRollout: url)
+            else { continue }
+            let key = "codex:\(meta.id)"
+
+            // Same tombstone rule as Claude transcripts: ended stays
+            // ended unless the rollout moved on since (resume).
+            if let ended = endedAt[key] {
+                if modified > ended.addingTimeInterval(2) {
+                    endedAt[key] = nil
+                } else {
+                    continue
+                }
+            }
+
+            // Registering into `transcripts` enrolls the rollout in the
+            // existing staleness sweep — retirement comes for free.
+            transcripts[key] = url
+            _ = withAnimation(.easeOut(duration: 0.45)) {
+                office.apply(.sessionStart(key: key, cwd: meta.cwd))
+            }
+            found += 1
+        }
+        return found
+    }
+
+    /// First line of a rollout → (session id, cwd), or nil on any surprise.
+    /// The window is generous: that line embeds Codex's whole system
+    /// prompt (18 KB in 0.147.0, measured live) — an 8 KB read would
+    /// truncate it and silently parse nothing.
+    private static func codexMeta(fromRollout url: URL) -> (id: String, cwd: String)? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        guard let data = try? handle.read(upToCount: 262_144),
+              let text = String(data: data, encoding: .utf8),
+              let first = text.split(separator: "\n").first
+        else { return nil }
+
+        struct Meta: Decodable {
+            let type: String?
+            let payload: Payload?
+            struct Payload: Decodable {
+                let id: String?
+                let cwd: String?
+            }
+        }
+        guard let meta = try? JSONDecoder().decode(Meta.self, from: Data(first.utf8)),
+              meta.type == "session_meta",
+              let id = meta.payload?.id, let cwd = meta.payload?.cwd
+        else { return nil }
+        return (id, cwd)
     }
 
     private func modificationDate(of url: URL) -> Date? {

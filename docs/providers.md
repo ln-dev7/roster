@@ -69,9 +69,15 @@ JSON blob as its final **argv** (not stdin) with `thread-id`, `cwd`,
 `input-messages` and `last-assistant-message`.
 
 That maps cleanly to *finished* (with a summary!) but nothing else. The
-gaps: no needs-input event, no session-end event. Presence comes from
-scanning `~/.codex/sessions/` rollout files (`.jsonl`, same tail-read
-trick as Claude transcripts), and staleness retires sessions like today.
+gaps: no needs-input event, no session-end event. **Presence is
+implemented** (v0.3): Roster scans `~/.codex/sessions/YYYY/MM/DD/
+rollout-*.jsonl` and decodes each file's first line —
+`{"type":"session_meta","payload":{"id":…,"cwd":…}}`, verified live
+against codex 0.147.0. That line embeds the CLI's whole system prompt
+(~18 KB measured), so the read window is 256 KB, not a few KB. The
+`payload.id` equals notify's `thread-id`: the desk that presence creates
+is the same session the end-of-turn events later enrich, and the usual
+mtime sweep retires quiet rollouts.
 
 Two real risks to design around: `notify` is a *single* global value —
 if the user already has one, Roster must wrap it, not replace it (chain
