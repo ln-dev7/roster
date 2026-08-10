@@ -88,7 +88,7 @@ struct RosterApp: App {
 
         // Gives "Settings…" its usual place in the app menu and ⌘, for free.
         Settings {
-            SettingsView(office: office, source: source)
+            SettingsView(office: office, source: source, updater: updater)
         }
     }
 }
