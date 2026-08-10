@@ -259,9 +259,13 @@ final class ClaudeCodeSource {
         // transcript path that does not exist yet (verified live: five
         // slots without a file, the one real session with it) — those
         // stay pending in the Office until their first sign of work.
+        // Replayed starts additionally need a live process: the fast
+        // path must not resurrect a session that quit while we were off.
         if case .sessionStart(let key, let cwd) = event,
            let (_, path) = transcriptRef,
-           FileManager.default.fileExists(atPath: path) {
+           FileManager.default.fileExists(atPath: path),
+           !isReplay || ProcessLiveness.snapshot()
+               .contains(ProviderKind(sessionKey: key), at: cwd) {
             _ = withAnimation(.easeOut(duration: 0.45)) {
                 office.seatActiveSession(key: key, cwd: cwd)
             }
@@ -288,6 +292,10 @@ final class ClaudeCodeSource {
         let fm = FileManager.default
         // Aliases can create a new config root at any time.
         roots = ClaudeConfigRoots.discover()
+        // One pass over the process table for this whole scan: presence
+        // stops being "the transcript is warm" and becomes "a matching
+        // CLI process is actually sitting in that folder".
+        let liveness = ProcessLiveness.snapshot()
 
         var found = 0
         for root in roots {
@@ -317,7 +325,11 @@ final class ClaudeCodeSource {
 
                     if Date().timeIntervalSince(modified) < aliveWindow {
                         transcripts[key] = transcript
-                        guard let cwd = Self.cwd(fromTranscript: transcript) else { continue }
+                        guard let cwd = Self.cwd(fromTranscript: transcript),
+                              // A warm transcript alone is hearsay — a
+                              // claude process in that folder is proof.
+                              liveness.contains(.claudeCode, at: cwd)
+                        else { continue }
                         // Idempotent: a session already in the room is a no-op.
                         // seatActiveSession, not a SessionStart event: a
                         // transcript being written is proof of real work.
@@ -329,10 +341,36 @@ final class ClaudeCodeSource {
                 }
             }
         }
-        found += scanCodexRollouts()
+        found += scanCodexRollouts(liveness: liveness)
 
         if found > 0 {
             log.info("transcript scan: \(found) live session(s) across \(self.roots.count) root(s)")
+        }
+
+        // Liveness sweep: a desk whose folder hosts no matching CLI
+        // process is a leftover — the tool quit without its SessionEnd
+        // (killed terminal, Claude 2.x background churn). ~30 s to leave
+        // instead of the 20-minute quiet rule. Cursor is exempt (its
+        // hooks come from the IDE, whose processes live elsewhere), and
+        // an EMPTY snapshot means the process table was unreadable —
+        // never a proof of death, so everybody stays.
+        if !liveness.entries.isEmpty {
+            for (key, id) in Array(office.externalToID) {
+                let provider = ProviderKind(sessionKey: key)
+                guard provider != .cursor,
+                      let session = office.session(id),
+                      office.workstations.indices.contains(session.stationIndex),
+                      let path = office.workstations[session.stationIndex].path,
+                      !liveness.contains(provider, at: path)
+                else { continue }
+                log.info("session \(key, privacy: .public) has no live process; retiring")
+                endedAt[key] = Date()
+                _ = withAnimation(.easeOut(duration: 0.45)) {
+                    office.apply(.sessionEnd(key: key))
+                }
+                transcripts[key] = nil
+                lastEventAt[key] = nil
+            }
         }
 
         // Retire tracked sessions whose transcript has gone quiet — they
@@ -389,7 +427,7 @@ final class ClaudeCodeSource {
     /// format surprise silently yields nothing. The id matches notify's
     /// thread-id, so the desk this creates is the SAME session the
     /// end-of-turn events later enrich.
-    private func scanCodexRollouts() -> Int {
+    private func scanCodexRollouts(liveness: ProcessLiveness.Snapshot) -> Int {
         guard CodexInstaller.toolDetected else { return 0 }
         let fm = FileManager.default
         let sessionsDir = fm.homeDirectoryForCurrentUser
@@ -404,7 +442,10 @@ final class ClaudeCodeSource {
         for case let url as URL in enumerator where url.pathExtension == "jsonl" {
             guard let modified = modificationDate(of: url),
                   Date().timeIntervalSince(modified) < aliveWindow,
-                  let meta = Self.codexMeta(fromRollout: url)
+                  let meta = Self.codexMeta(fromRollout: url),
+                  // Same rule as Claude: a warm rollout only counts with
+                  // a codex process actually sitting in that folder.
+                  liveness.contains(.codex, at: meta.cwd)
             else { continue }
             let key = "codex:\(meta.id)"
 

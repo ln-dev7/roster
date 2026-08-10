@@ -73,6 +73,17 @@ enum ProviderKind: String, Equatable {
         case .codex: return "Codex"
         }
     }
+
+    /// What this provider's CLI looks like in a command line — the
+    /// needle ProcessLiveness searches for in exec paths and argv.
+    var processToken: String {
+        switch self {
+        case .claudeCode: return "claude"
+        case .gemini: return "gemini"
+        case .cursor: return "cursor"
+        case .codex: return "codex"
+        }
+    }
 }
 
 /// One desk in the room = one SESSION. Two terminals in the same folder
