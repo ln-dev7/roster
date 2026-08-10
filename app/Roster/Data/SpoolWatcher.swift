@@ -8,17 +8,24 @@ import Foundation
 /// descriptor for writes, and every wake-up drains from the last offset.
 /// Lines are handed to the callback **in order, on the main queue** — the
 /// office lives on the main actor.
+///
+/// The callback's second parameter says whether the line is REPLAY
+/// (already in the file when we opened it) or LIVE (appended while
+/// watching). The distinction matters: replayed lines are history, and
+/// the consumer may want to drop the history of sessions that are
+/// provably over — otherwise a session that died without its SessionEnd
+/// (killed terminal, crash) haunts the room at every launch.
 final class SpoolWatcher {
 
     private let url: URL
-    private let onLine: @MainActor (String) -> Void
+    private let onLine: @MainActor (String, _ isReplay: Bool) -> Void
     private let queue = DispatchQueue(label: "me.lndev.roster.spool")
 
     private var handle: FileHandle?
     private var source: DispatchSourceFileSystemObject?
     private var remainder = Data()
 
-    init(url: URL, onLine: @escaping @MainActor (String) -> Void) {
+    init(url: URL, onLine: @escaping @MainActor (String, _ isReplay: Bool) -> Void) {
         self.url = url
         self.onLine = onLine
     }
@@ -31,7 +38,7 @@ final class SpoolWatcher {
     func start() {
         queue.async { [self] in
             openFileCreatingIfNeeded()
-            drain()
+            drain(replay: true)
             installSource()
         }
     }
@@ -69,15 +76,16 @@ final class SpoolWatcher {
             guard let self else { return }
             if src.data.contains(.delete) || src.data.contains(.rename) {
                 // The file was replaced (e.g. rotated): reopen and rescan.
+                // Rescanning a rotated file is reading history — replay.
                 self.source?.cancel()
                 self.source = nil
                 try? self.handle?.close()
                 self.remainder.removeAll()
                 self.openFileCreatingIfNeeded()
-                self.drain()
+                self.drain(replay: true)
                 self.installSource()
             } else {
-                self.drain()
+                self.drain(replay: false)
             }
         }
         src.activate()
@@ -85,7 +93,7 @@ final class SpoolWatcher {
     }
 
     /// Reads everything new since the last call and emits complete lines.
-    private func drain() {
+    private func drain(replay: Bool) {
         guard let handle else { return }
 
         // Truncation guard: if the file shrank under us, start over.
@@ -112,7 +120,7 @@ final class SpoolWatcher {
             // because the main queue *is* the main actor's executor.
             DispatchQueue.main.async { [onLine] in
                 MainActor.assumeIsolated {
-                    onLine(line)
+                    onLine(line, replay)
                 }
             }
         }

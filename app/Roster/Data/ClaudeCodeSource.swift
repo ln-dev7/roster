@@ -186,8 +186,8 @@ final class ClaudeCodeSource {
 
     private func startFeeds() {
         if watcher == nil {
-            let watcher = SpoolWatcher(url: Self.spoolURL) { [weak self] line in
-                self?.handle(line: line)
+            let watcher = SpoolWatcher(url: Self.spoolURL) { [weak self] line, isReplay in
+                self?.handle(line: line, isReplay: isReplay)
             }
             watcher.start()
             self.watcher = watcher
@@ -208,10 +208,30 @@ final class ClaudeCodeSource {
         }
     }
 
-    private func handle(line: String) {
-        if let (key, path) = ClaudeEvent.transcriptPath(fromJSONLine: line) {
+    private func handle(line: String, isReplay: Bool) {
+        let transcriptRef = ClaudeEvent.transcriptPath(fromJSONLine: line)
+        if let (key, path) = transcriptRef {
             transcripts[key] = URL(fileURLWithPath: path)
         }
+
+        // Replayed history of a session whose transcript is GONE (Claude
+        // Code cleans them up after ~30 days) or long quiet is exactly
+        // that — history. Sessions that died without their SessionEnd
+        // (killed terminal, crash) would otherwise haunt the room as
+        // ghost desks at every launch, forever if the transcript file no
+        // longer exists. Live lines are never dropped: a hook that just
+        // fired belongs to a session that is provably alive.
+        if isReplay, let (key, path) = transcriptRef {
+            let modified = modificationDate(of: URL(fileURLWithPath: path))
+            let longQuiet = modified.map {
+                Date().timeIntervalSince($0) > staleAfter
+            } ?? true // no file at all = the oldest kind of quiet
+            if longQuiet {
+                transcripts[key] = nil
+                return
+            }
+        }
+
         guard let event = ClaudeEvent(jsonLine: line) else {
             log.debug("spool line ignored")
             return
@@ -299,9 +319,18 @@ final class ClaudeCodeSource {
 
         // Retire tracked sessions whose transcript has gone quiet — they
         // ended while nobody was listening (or before the hook existed).
+        // A transcript that VANISHED counts as ancient (Claude Code
+        // cleaned it up), with one guard: a brand-new session can fire
+        // its first hooks before the file lands on disk, so fresh events
+        // keep it alive.
         for (key, url) in transcripts {
-            guard let modified = modificationDate(of: url) else { continue }
-            if Date().timeIntervalSince(modified) > staleAfter {
+            let modified = modificationDate(of: url)
+            if modified == nil,
+               let last = lastEventAt[key],
+               Date().timeIntervalSince(last) < staleAfter {
+                continue
+            }
+            if Date().timeIntervalSince(modified ?? .distantPast) > staleAfter {
                 log.info("session \(key, privacy: .public) stale; retiring")
                 endedAt[key] = Date()
                 _ = withAnimation(.easeOut(duration: 0.45)) {
