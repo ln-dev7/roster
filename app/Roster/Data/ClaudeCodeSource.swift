@@ -252,6 +252,22 @@ final class ClaudeCodeSource {
             lastEventAt[key] = Date()
         }
 
+        // A SessionStart whose transcript ALREADY exists on disk is a
+        // real conversation opening (a resume, a warm start) — seat it
+        // the moment the session launches, which is what the desk should
+        // feel like. Claude Code 2.x's pre-created slots carry a
+        // transcript path that does not exist yet (verified live: five
+        // slots without a file, the one real session with it) — those
+        // stay pending in the Office until their first sign of work.
+        if case .sessionStart(let key, let cwd) = event,
+           let (_, path) = transcriptRef,
+           FileManager.default.fileExists(atPath: path) {
+            _ = withAnimation(.easeOut(duration: 0.45)) {
+                office.seatActiveSession(key: key, cwd: cwd)
+            }
+            return
+        }
+
         // withAnimation so session arrivals/departures fade like the demo
         // ones (RoomView's insertion/removal transitions).
         _ = withAnimation(.easeOut(duration: 0.45)) {
