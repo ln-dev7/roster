@@ -10,6 +10,15 @@
     <description>Updates for Roster, the little office for your coding agents.</description>
     <language>en</language>
     <item>
+      <title>0.4.0</title>
+      <pubDate>Mon, 10 Aug 2026 14:49:05 +0000</pubDate>
+      <sparkle:version>4</sparkle:version>
+      <sparkle:shortVersionString>0.4.0</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <description><![CDATA[<p>Roster 0.2.0.</p>]]></description>
+      <enclosure url="https://github.com/ln-dev7/roster/releases/download/v0.4.0/Roster.dmg" length="1810133" type="application/octet-stream" sparkle:edSignature="yocW1fw6yBxWG8jR03ZJYaVtwqiLJ8JqIoShRvqEyWma2AKxPDN/RpkO2eQimE06qxpt4WwEDGdBNqtO3XHoAQ=="/>
+    </item>
+    <item>
       <title>0.3.0</title>
       <pubDate>Mon, 10 Aug 2026 09:56:36 +0000</pubDate>
       <sparkle:version>3</sparkle:version>
