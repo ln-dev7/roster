@@ -1,9 +1,21 @@
 import SwiftUI
 
 /// The welcome card, shown once on first launch (and again from
-/// Help → "Welcome to Roster"). Four sentences and a button — an
+/// Help → "Welcome to Roster"). A few sentences and a button — an
 /// onboarding should explain the room, not replace it.
+///
+/// The card is also where connecting happens on first launch: there is
+/// no demo room anymore, so the honest pitch is "connect and the office
+/// fills itself". Skipping is allowed; the banner keeps the offer open.
 struct OnboardingView: View {
+
+    /// True while the hooks aren't installed — the primary button then
+    /// connects AND enters. Reopened from Help after connecting, the
+    /// card only needs its original "Enter the office".
+    let needsConnect: Bool
+
+    /// Installs the wiring, then dismisses (the parent does both).
+    let onConnect: () -> Void
 
     /// The parent owns the "seen" flag; dismissing is its move.
     let onDismiss: () -> Void
@@ -20,7 +32,7 @@ struct OnboardingView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Welcome to Roster")
                         .font(.title.weight(.semibold))
-                    Text("Your Claude Code sessions, as colleagues in a little office.")
+                    Text("Your coding agents, as colleagues in a little office.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -35,7 +47,7 @@ struct OnboardingView: View {
                     row(icon: "arrowkeys",
                         text: "The arrow keys move your own avatar. Wander off; you'll sit back down when you return to your chair.")
                     row(icon: "bolt",
-                        text: "Connect adds a small hook to each Claude Code settings.json (after a backup) — that's what unlocks the waiting, finished and failed states.")
+                        text: "Connecting adds small hooks to each agent's config — Claude Code, Gemini CLI, Cursor, Codex — every file backed up first. That's what unlocks the waiting, finished and failed states.")
                 }
 
                 // The status colors, the room's whole vocabulary.
@@ -47,13 +59,34 @@ struct OnboardingView: View {
                 }
                 .padding(.vertical, 2)
 
-                Button(action: onDismiss) {
-                    Text("Enter the office")
-                        .frame(maxWidth: .infinity)
+                VStack(spacing: 10) {
+                    if needsConnect {
+                        Button(action: onConnect) {
+                            Text("Connect & enter the office")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .keyboardShortcut(.defaultAction)
+
+                        // The quiet way out — the banner keeps offering
+                        // Connect, so skipping here costs nothing.
+                        Button(action: onDismiss) {
+                            Text("Not now")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    } else {
+                        Button(action: onDismiss) {
+                            Text("Enter the office")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .keyboardShortcut(.defaultAction)
+                    }
                 }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .keyboardShortcut(.defaultAction)
             }
             .padding(24)
             .frame(width: 460)

@@ -34,7 +34,7 @@ struct SidebarView: View {
                     .fill(source.state == .connected ? Color.green : Color.orange)
                     .frame(width: 7, height: 7)
                     .help(source.state == .connected
-                          ? Text("Connected to Claude Code")
+                          ? Text("Connected — hooks installed")
                           : Text("Presence only — hooks not installed"))
             }
             .padding(.horizontal, 14)
@@ -45,7 +45,7 @@ struct SidebarView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if office.sessions.isEmpty {
-                        Text("No sessions yet — open a Claude Code session.")
+                        Text("No sessions yet — launch a coding agent in any repo.")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                             .padding(.top, 8)

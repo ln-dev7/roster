@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Debug controls: spawn agents on stations and push each one through every
-/// domain event the real data source sends. Hidden behind the Debug menu
-/// once connected — and kept forever as the GIF-recording rig.
+/// domain event the real data source sends. Lives behind the Debug menu
+/// (⇧⌘D) — the permanent GIF-recording rig, never part of onboarding.
 struct SimulationPanel: View {
 
     let office: Office

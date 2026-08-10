@@ -140,6 +140,12 @@ final class ClaudeCodeSource {
     /// here the spool starts filling. The first error lands in `state`
     /// for the banner to display.
     func connect() {
+        // Ask for notification permission HERE, not at launch: arrivals —
+        // the only thing Roster notifies about — require the finished
+        // state, which only exists once the hooks are in. Asking at the
+        // moment of consent also keeps first launch down to one dialog.
+        Notifier.requestPermissionIfNeeded()
+
         roots = ClaudeConfigRoots.discover()
         var firstError: Error?
         for root in roots {

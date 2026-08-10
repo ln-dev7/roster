@@ -1,8 +1,7 @@
 import SwiftUI
 
 /// Root view: connection banner when needed, the room, and the simulation
-/// panel (visible until Roster is connected, then on demand via the Debug
-/// menu — it doubles as the GIF-recording studio).
+/// panel (Debug menu only — the GIF-recording studio).
 struct ContentView: View {
 
     /// Owned by `RosterApp` (the Settings scene needs them too); this view
@@ -33,9 +32,9 @@ struct ContentView: View {
     @State private var selectedSessionID: Int?
 
     private var isPanelVisible: Bool {
-        // Before connection the panel is the only way to see the product
-        // move, so it stays. After that, it's opt-in.
-        showSimulationPanel || source.state != .connected
+        // Strictly opt-in (⇧⌘D): a first launch shows the real, calm
+        // office — not debug machinery.
+        showSimulationPanel
     }
 
     var body: some View {
@@ -83,13 +82,24 @@ struct ContentView: View {
                 }
             }
 
-            // First launch: the welcome card, over everything.
+            // First launch: the welcome card, over everything. Its primary
+            // button both connects and dismisses — the office is empty
+            // until real sessions exist, so connecting IS the onboarding.
             if !hasSeenWelcome {
-                OnboardingView {
-                    withAnimation(.easeOut(duration: 0.3)) {
-                        hasSeenWelcome = true
+                OnboardingView(
+                    needsConnect: source.state != .connected,
+                    onConnect: {
+                        withAnimation(.easeOut(duration: 0.45)) {
+                            source.connect()
+                            hasSeenWelcome = true
+                        }
+                    },
+                    onDismiss: {
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            hasSeenWelcome = true
+                        }
                     }
-                }
+                )
                 .transition(.opacity)
             }
         }
@@ -112,7 +122,10 @@ struct ContentView: View {
                     project: office.workstations[session.stationIndex].name
                 )
             }
-            Notifier.requestPermissionIfNeeded()
+            // Notification permission is asked when the user connects
+            // (ClaudeCodeSource.connect) — not here. First launch should
+            // open on the welcome card alone, without a system dialog
+            // racing it.
 
             // Settings persisted from previous launches.
             office.finishThreshold = (UserDefaults.standard
@@ -120,10 +133,6 @@ struct ContentView: View {
             WindowLevel.apply(keepOnTop: keepOnTop)
 
             source.refresh()
-            // No hook yet → show something alive rather than an empty room.
-            if source.state != .connected && office.workstations.isEmpty {
-                office.seedDemo()
-            }
         }
         .onChange(of: keepOnTop) {
             WindowLevel.apply(keepOnTop: keepOnTop)
