@@ -392,10 +392,11 @@ struct RoomView: View {
         keyMonitor = NSEvent.addLocalMonitorForEvents(
             matching: [.keyDown, .keyUp]
         ) { event in
-            // Leave modified arrows (⌘←…) and text editing alone.
+            // Leave modified arrows (⌘←…) and text editing alone — but
+            // NOT ⇧: shifted arrows are ours, they mean "hurry".
             guard Self.arrowKeyCodes.contains(event.keyCode),
                   event.modifierFlags
-                      .intersection([.command, .option, .control, .shift]).isEmpty,
+                      .intersection([.command, .option, .control]).isEmpty,
                   !(NSApp.keyWindow?.firstResponder is NSText)
             else { return event }
 
@@ -464,7 +465,11 @@ struct RoomView: View {
 
         // Normalized so diagonals aren't faster, like every game ever.
         let length = (dx * dx + dy * dy).squareRoot()
-        let speed: CGFloat = 62 // logical pixels per second
+        // ⇧ sprints at the auto-walk's pace — the room has exactly two
+        // gaits, stroll and hurry. Polled live each tick, so pressing or
+        // releasing Shift mid-walk changes speed without re-keying.
+        let sprinting = NSEvent.modifierFlags.contains(.shift)
+        let speed: CGFloat = sprinting ? 130 : 62 // logical px per second
         youFeet = CGPoint(
             x: min(max(youFeet.x + dx / length * speed * dt, 8),
                    RoomPlan.size.width - 8),
