@@ -25,7 +25,7 @@ extension Office {
             // the desk. (Sessions found by the activity scans seat
             // immediately via `seatActiveSession`: a transcript being
             // written IS meaningful.)
-            if externalToID[key] == nil, let cwd {
+            if externalToID[key] == nil {
                 pendingCwd[key] = cwd
             }
             return nil
