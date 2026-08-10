@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Roster — Un bureau pour tes agents de code",
-    "description": "Une app macOS qui transforme tes agents de code — Claude Code, Gemini CLI, Cursor, Codex — en petits collègues dans un bureau pixel. Ils travaillent à leur poste, et viennent au tien quand ils ont fini. Gratuit, open source, 100 % local."
+    "description": "Tes agents de code en petits collègues dans un bureau pixel sur ton Mac — Claude Code, Gemini CLI, Cursor, Codex. Ils viennent à ton poste quand ils ont fini. Gratuit, open source, 100 % local."
   },
   "nav": {
     "features": "Fonctionnalités",
@@ -13,7 +13,7 @@
   "hero": {
     "badge": "Gratuit & open source · macOS",
     "title": "Tes agents de code ont enfin <mark>un bureau</mark>.",
-    "subtitle": "Roster transforme chaque session de code — Claude Code, Gemini CLI, Cursor ou Codex — en petit collègue dans un bureau pixel sur ton Mac. Ils travaillent à leur poste, se lèvent quand ils ont besoin de toi, et traversent jusqu'à ton bureau quand le travail est fini. Tu peux même te balader dans la pièce avec les flèches.",
+    "subtitle": "Roster transforme chaque session de code — Claude Code, Gemini CLI, Cursor ou Codex — en petit collègue dans un bureau pixel sur ton Mac. Ils travaillent à leur poste, se lèvent quand ils ont besoin de toi, et traversent jusqu'au tien dès que le travail est fini.",
     "download": "Télécharger pour macOS",
     "github": "Voir sur GitHub",
     "note": "macOS 14+ · Signé & notarisé · Sans compte, sans télémétrie",
@@ -30,15 +30,15 @@
     "t6": "circle · 2 vient de s'installer à son propre bureau"
   },
   "positioning": {
-    "title": "Pas un dashboard de plus.",
-    "body": "Les listes, les diffs, les kanbans — d'autres outils le font déjà très bien. Roster, c'est la version ambiante : un petit bureau tranquille dans un coin de ton écran. Tu ne le lis pas, tu y jettes un œil. L'état de la pièce, c'est l'état de tes agents."
+    "title": "Arrête de surveiller tes terminaux.",
+    "body": "Tu lances un agent, tu repars bosser, et tu perds le fil — fini depuis dix minutes ? Bloqué sur une question ? Les listes, les diffs et les kanbans peuvent te le dire, si tu penses à aller les lire. Roster, c'est la version ambiante : un petit bureau tranquille dans un coin de ton écran. Tu ne le lis pas, tu y jettes un œil. L'état de la pièce, c'est l'état de tes agents."
   },
   "features": {
     "eyebrow": "Fonctionnalités",
     "title": "Une pièce qui parle d'elle-même",
     "f1": {
       "title": "La traversée",
-      "body": "Le vrai travail se mérite : quand un agent termine une longue tâche, il se lève, traverse le bureau et t'attend à ton poste jusqu'à ce que tu aies jeté un œil — avec une notification native (et son ding) si tu es ailleurs. Découvrir un agent fini vingt minutes trop tard, c'est terminé."
+      "body": "Le vrai travail se mérite : quand un agent termine une longue tâche, il se lève, traverse le bureau et t'attend à ton poste jusqu'à ce que tu aies jeté un œil — avec une notification native (et son ding) si tu es ailleurs. Plus jamais d'agent fini découvert vingt minutes trop tard."
     },
     "f2": {
       "title": "Un coup d'œil, tous les états",

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "Roster — An office for your coding agents",
-    "description": "A macOS app that turns your coding agents — Claude Code, Gemini CLI, Cursor, Codex — into little colleagues in a pixel office. They work at their desks, and walk to yours when they're done. Free, open source, local-only."
+    "description": "Your coding agents as little colleagues in a pixel office on your Mac — Claude Code, Gemini CLI, Cursor, Codex. They walk to your desk when they're done. Free, open source, local-only."
   },
   "nav": {
     "features": "Features",
@@ -13,7 +13,7 @@
   "hero": {
     "badge": "Free & open source · macOS",
     "title": "Your coding agents just got <mark>an office</mark>.",
-    "subtitle": "Roster turns every coding session — Claude Code, Gemini CLI, Cursor or Codex — into a little colleague in a pixel office on your Mac. They work at their desks, stand up when they need you, and walk over to yours when the job is done. You can even wander the room with your arrow keys.",
+    "subtitle": "Roster turns every coding session — Claude Code, Gemini CLI, Cursor or Codex — into a little colleague in a pixel office on your Mac. They work at their desks, stand up when they need you, and walk over to yours the moment the job is done.",
     "download": "Download for macOS",
     "github": "View on GitHub",
     "note": "macOS 14+ · Signed & notarized · No account, no telemetry",
@@ -30,15 +30,15 @@
     "t6": "circle · 2 just sat down at its own desk"
   },
   "positioning": {
-    "title": "Not another dashboard.",
-    "body": "Lists, diffs, kanban boards — other tools already do that well. Roster is the ambient version: a quiet little office in the corner of your screen. You don't read it, you glance at it. The state of the room is the state of your agents."
+    "title": "Stop babysitting terminals.",
+    "body": "You kick off an agent, alt-tab to real work, and lose track — done ten minutes ago? Stuck on a question? Lists, diffs and kanban boards can tell you, if you remember to go read them. Roster is the ambient version: a quiet little office in the corner of your screen. You don't read it, you glance at it. The state of the room is the state of your agents."
   },
   "features": {
     "eyebrow": "Features",
     "title": "A room that speaks for itself",
     "f1": {
       "title": "The walk",
-      "body": "Real work earns a crossing: when an agent finishes a long task, it stands up, walks across the office and waits at your desk until you've had a look — with a native notification (and a ding) in case you're elsewhere. Discovering a finished agent twenty minutes late is over."
+      "body": "Real work earns a crossing: when an agent finishes a long task, it stands up, walks across the office and waits at your desk until you've had a look — with a native notification (and a ding) in case you're elsewhere. Never find out twenty minutes late again."
     },
     "f2": {
       "title": "One glance, every state",
