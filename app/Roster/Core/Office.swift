@@ -145,6 +145,11 @@ final class Office {
     // ── Plumbing for the real event source (see Office+Events.swift) ────
     /// Claude Code session_id → our session id.
     @ObservationIgnored var externalToID: [String: Int] = [:]
+    /// Sessions announced by a SessionStart but not yet seated — Claude
+    /// Code 2.x pre-creates sessions and spawns one per background
+    /// conversation, so a start only registers the cwd; the first
+    /// meaningful event spends it (see `apply`).
+    @ObservationIgnored var pendingCwd: [String: String] = [:]
     /// When each session last received a prompt — used by the walk rule.
     @ObservationIgnored var lastPromptAt: [Int: Date] = [:]
     /// Last assistant message per session — shown by the detail card, so
@@ -292,6 +297,7 @@ final class Office {
         for session in sessions { invalidateChoreography(for: session.id) }
         generations.removeAll()
         externalToID.removeAll()
+        pendingCwd.removeAll()
         lastPromptAt.removeAll()
         lastSummary.removeAll()
         sessions.removeAll()

@@ -23,8 +23,20 @@ final class OfficeEventTests: XCTestCase {
 
     // MARK: Stations from repositories
 
-    func testSessionStartCreatesTheDeskAndSeatsTheAgent() {
+    func testASessionStartAloneSeatsNobody() {
+        // Claude Code 2.x pre-creates sessions ("new session — send a
+        // prompt to start") and spawns a fresh one per background
+        // conversation. A start is a slot, not a colleague.
+        office.apply(.sessionStart(key: "slot", cwd: "/Users/me/dev/circle"))
+
+        XCTAssertTrue(office.workstations.isEmpty, "a slot is not a colleague")
+        XCTAssertTrue(office.sessions.isEmpty)
+    }
+
+    func testTheFirstPromptSeatsThePendingSessionAtItsRememberedCwd() {
         office.apply(.sessionStart(key: "s1", cwd: "/Users/me/dev/circle"))
+        // Later hook events may omit cwd — the start's cwd is remembered.
+        office.apply(.promptSubmitted(key: "s1", cwd: nil))
 
         XCTAssertEqual(office.workstations.count, 1)
         XCTAssertEqual(office.workstations[0].name, "circle")
@@ -33,9 +45,30 @@ final class OfficeEventTests: XCTestCase {
         XCTAssertEqual(office.sessions[0].status, .working)
     }
 
+    func testAScanDiscoveredSessionSeatsImmediately() {
+        // The transcript/rollout scans prove real work — no prompt needed.
+        office.seatActiveSession(key: "live", cwd: "/repo/circle")
+
+        XCTAssertEqual(office.sessions.count, 1)
+        XCTAssertEqual(office.sessions[0].status, .working)
+    }
+
+    func testAnAbandonedSlotEndsWithoutEverSitting() {
+        office.apply(.sessionStart(key: "slot", cwd: "/repo/circle"))
+        office.apply(.sessionEnd(key: "slot"))
+
+        XCTAssertTrue(office.sessions.isEmpty)
+        // The pending cwd died with it: a later cwd-less event can't
+        // resurrect the slot.
+        office.apply(.promptSubmitted(key: "slot", cwd: nil))
+        XCTAssertTrue(office.sessions.isEmpty, "ended slots don't seat later")
+    }
+
     func testTwoSessionsOnTheSameRepoGetTheirOwnDesks() {
         office.apply(.sessionStart(key: "s1", cwd: "/repo/circle"))
         office.apply(.sessionStart(key: "s2", cwd: "/repo/circle"))
+        office.apply(.promptSubmitted(key: "s1", cwd: nil))
+        office.apply(.promptSubmitted(key: "s2", cwd: nil))
 
         XCTAssertEqual(office.workstations.count, 2,
                        "one colleague per desk — even from the same folder")
@@ -49,12 +82,13 @@ final class OfficeEventTests: XCTestCase {
     func testDuplicateSessionStartIsIgnored() {
         office.apply(.sessionStart(key: "s1", cwd: "/repo/circle"))
         office.apply(.sessionStart(key: "s1", cwd: "/repo/circle"))
+        office.apply(.promptSubmitted(key: "s1", cwd: nil))
         XCTAssertEqual(office.sessions.count, 1)
     }
 
     func testTheRoomCapsAtSixDesks() {
         for i in 1...7 {
-            office.apply(.sessionStart(key: "s\(i)", cwd: "/repo/project\(i)"))
+            office.apply(.promptSubmitted(key: "s\(i)", cwd: "/repo/project\(i)"))
         }
         XCTAssertEqual(office.workstations.count, Office.maxStations)
         XCTAssertEqual(office.sessions.count, Office.maxStations,
@@ -141,8 +175,8 @@ final class OfficeEventTests: XCTestCase {
     // MARK: Providers
 
     func testProviderPrefixedKeysDressTheirDesks() {
-        office.apply(.sessionStart(key: "s1", cwd: "/repo/a"))
-        office.apply(.sessionStart(key: "gemini:g1", cwd: "/repo/b"))
+        office.apply(.promptSubmitted(key: "s1", cwd: "/repo/a"))
+        office.apply(.promptSubmitted(key: "gemini:g1", cwd: "/repo/b"))
         office.apply(.promptSubmitted(key: "cursor:c1", cwd: "/repo/c"))
         office.apply(.stopped(key: "codex:t1", cwd: "/repo/d", summary: nil))
 
@@ -165,6 +199,7 @@ final class OfficeEventTests: XCTestCase {
 
     func testSessionEndRemovesTheAgentAndItsDesk() {
         office.apply(.sessionStart(key: "s1", cwd: "/repo/circle"))
+        office.apply(.promptSubmitted(key: "s1", cwd: nil))
         office.apply(.sessionEnd(key: "s1"))
 
         XCTAssertTrue(office.sessions.isEmpty)
@@ -177,8 +212,8 @@ final class OfficeEventTests: XCTestCase {
     }
 
     func testEachTwinDeskDiesWithItsOwnSession() {
-        office.apply(.sessionStart(key: "s1", cwd: "/repo/circle"))
-        office.apply(.sessionStart(key: "s2", cwd: "/repo/circle"))
+        office.apply(.promptSubmitted(key: "s1", cwd: "/repo/circle"))
+        office.apply(.promptSubmitted(key: "s2", cwd: "/repo/circle"))
 
         office.apply(.sessionEnd(key: "s1"))
         XCTAssertEqual(office.workstations.count, 1,

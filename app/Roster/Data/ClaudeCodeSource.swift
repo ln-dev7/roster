@@ -303,8 +303,10 @@ final class ClaudeCodeSource {
                         transcripts[key] = transcript
                         guard let cwd = Self.cwd(fromTranscript: transcript) else { continue }
                         // Idempotent: a session already in the room is a no-op.
+                        // seatActiveSession, not a SessionStart event: a
+                        // transcript being written is proof of real work.
                         _ = withAnimation(.easeOut(duration: 0.45)) {
-                            office.apply(.sessionStart(key: key, cwd: cwd))
+                            office.seatActiveSession(key: key, cwd: cwd)
                         }
                         found += 1
                     }
@@ -404,7 +406,7 @@ final class ClaudeCodeSource {
             // existing staleness sweep — retirement comes for free.
             transcripts[key] = url
             _ = withAnimation(.easeOut(duration: 0.45)) {
-                office.apply(.sessionStart(key: key, cwd: meta.cwd))
+                office.seatActiveSession(key: key, cwd: meta.cwd)
             }
             found += 1
         }
