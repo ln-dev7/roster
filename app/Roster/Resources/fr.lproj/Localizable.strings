@@ -77,6 +77,7 @@
 "Takes effect after relaunch." = "Prend effet au redémarrage de l'app.";
 "Relaunch now" = "Relancer maintenant";
 "Roster checks once a day on its own; updates install only when you say so." = "Roster vérifie une fois par jour tout seul ; l'installation n'arrive que si tu la valides.";
+"Support the project" = "Soutenir le projet";
 
 /* ── Menus ── */
 "Keep on Top" = "Toujours au premier plan";

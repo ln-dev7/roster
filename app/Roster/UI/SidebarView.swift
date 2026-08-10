@@ -61,6 +61,19 @@ struct SidebarView: View {
             Spacer(minLength: 0)
             Divider()
 
+            // A quiet patronage row, right above Settings — where the
+            // eye already goes.
+            Button {
+                WorkspaceActions.openSupport()
+            } label: {
+                Label("Support the project", systemImage: "heart")
+                    .labelStyle(.titleAndIcon)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 14)
+            .padding(.top, 10)
+
             // Footer: Settings, right here in the app.
             HStack {
                 SettingsLink {

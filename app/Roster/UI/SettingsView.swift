@@ -100,6 +100,11 @@ private struct GeneralSettings: View {
                     }
                     .disabled(!updater.canCheckForUpdates)
                 }
+                Button {
+                    WorkspaceActions.openSupport()
+                } label: {
+                    Label("Support the project", systemImage: "heart")
+                }
             } footer: {
                 Text("Roster checks once a day on its own; updates install only when you say so.")
             }

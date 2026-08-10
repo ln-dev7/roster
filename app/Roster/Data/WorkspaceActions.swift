@@ -23,6 +23,14 @@ enum WorkspaceActions {
         open(path: path, withBundleID: terminalBundleID)
     }
 
+    /// The shop page where people can support Roster's development —
+    /// linked from the sidebar and Settings.
+    static let supportURL = URL(string: "https://lndev.mychariow.shop/prd_3cu1s0")!
+
+    static func openSupport() {
+        NSWorkspace.shared.open(supportURL)
+    }
+
     private static func open(path: String, withBundleID bundleID: String) {
         let folder = URL(fileURLWithPath: path, isDirectory: true)
         if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
