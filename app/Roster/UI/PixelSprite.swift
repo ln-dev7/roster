@@ -43,13 +43,60 @@ struct SpriteLook: Equatable {
         )
     }
 
-    /// Your own character, fixed.
-    static let you = SpriteLook(
-        skin: Color(hex: 0x8D5524),
-        hair: Color(hex: 0x101010),
-        shirt: Color(hex: 0x3A3F52),
-        pants: Color(hex: 0x23263A)
-    )
+    /// Your own character — four choices living in UserDefaults (see
+    /// `YouStyle`), picked in the welcome card or Settings. The defaults
+    /// are the outfit You has worn since day one.
+    static var you: SpriteLook { YouStyle.look }
+}
+
+/// Your avatar's wardrobe: curated palettes and the UserDefaults keys
+/// behind them. Curated swatches rather than a free color wheel, so any
+/// combination stays inside the room's pixel-art register. Agents are
+/// untouched — their look still hashes from their desk's identity.
+enum YouStyle {
+
+    static let skinKey = "youSkin"
+    static let hairKey = "youHair"
+    static let shirtKey = "youShirt"
+    static let pantsKey = "youPants"
+
+    static let defaultSkin: UInt32 = 0x8D5524
+    static let defaultHair: UInt32 = 0x101010
+    static let defaultShirt: UInt32 = 0x3A3F52
+    static let defaultPants: UInt32 = 0x23263A
+
+    /// Six skin tones from pale to deep — the agents' three sit among
+    /// them, so You never looks like a stranger to the room.
+    static let skins: [UInt32] = [
+        0xF7D7B6, 0xF2C9A0, 0xD9A16C, 0xC68642, 0x8D5524, 0x5C3A21,
+    ]
+    static let hairs: [UInt32] = [
+        0x101010, 0x2E2A28, 0x6B4A2F, 0x9C6B33, 0xD9A441, 0x8C8C8C,
+    ]
+    static let shirts: [UInt32] = [
+        0x3A3F52, 0xC94F3D, 0x2E7DAF, 0x3F8C5A, 0x8A56A8, 0xD98E2B,
+    ]
+    static let pants: [UInt32] = [
+        0x23263A, 0x4A4E69, 0x5B4632, 0x2F4858, 0x6E4B4B, 0x3B3B3B,
+    ]
+
+    static func stored(_ key: String, fallback: UInt32) -> UInt32 {
+        guard let value = UserDefaults.standard.object(forKey: key) as? Int
+        else { return fallback }
+        return UInt32(clamping: value)
+    }
+
+    /// The current outfit, straight from the defaults. Reading this does
+    /// NOT observe changes — views that must re-render live (RoomView,
+    /// the picker) hold the keys in @AppStorage instead.
+    static var look: SpriteLook {
+        SpriteLook(
+            skin: Color(hex: stored(skinKey, fallback: defaultSkin)),
+            hair: Color(hex: stored(hairKey, fallback: defaultHair)),
+            shirt: Color(hex: stored(shirtKey, fallback: defaultShirt)),
+            pants: Color(hex: stored(pantsKey, fallback: defaultPants))
+        )
+    }
 }
 
 /// The floating name pill — the one Gather-ism everyone reads instantly.

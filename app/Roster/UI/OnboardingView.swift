@@ -59,6 +59,16 @@ struct OnboardingView: View {
                 }
                 .padding(.vertical, 2)
 
+                Divider()
+
+                // Dress yourself before entering — the choices land in
+                // UserDefaults and can be revisited in Settings anytime.
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Dress your avatar")
+                        .font(.callout.weight(.medium))
+                    AvatarStylePicker()
+                }
+
                 VStack(spacing: 10) {
                     if needsConnect {
                         Button(action: onConnect) {

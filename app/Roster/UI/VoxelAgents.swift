@@ -111,7 +111,7 @@ struct VoxelSceneView: NSViewRepresentable {
         for figure in figures {
             seen.insert(figure.id)
             let isNew = c.nodes[figure.id] == nil
-            let node = c.nodes[figure.id] ?? {
+            var node = c.nodes[figure.id] ?? {
                 let fresh = VoxelBuilder.character(look: figure.look)
                 fresh.opacity = 0
                 fresh.runAction(.fadeIn(duration: 0.35))
@@ -119,6 +119,20 @@ struct VoxelSceneView: NSViewRepresentable {
                 c.nodes[figure.id] = fresh
                 return fresh
             }()
+            // A colleague never changes outfit mid-day — but YOU can,
+            // from the avatar customizer. Swap the body in place: same
+            // spot, same pose, same heading, new colors.
+            if !isNew, c.looks[figure.id] != figure.look {
+                let fresh = VoxelBuilder.character(look: figure.look)
+                fresh.position = node.position
+                node.removeFromParentNode()
+                scene.rootNode.addChildNode(fresh)
+                VoxelBuilder.apply(figure.pose, to: fresh)
+                VoxelBuilder.turn(fresh, yaw: c.yaws[figure.id] ?? VoxelBuilder.restingYaw)
+                c.nodes[figure.id] = fresh
+                node = fresh
+            }
+            c.looks[figure.id] = figure.look
             node.scale = SCNVector3(scale, scale, scale)
 
             let current = c.positions[figure.id] ?? figure.feet
@@ -171,6 +185,7 @@ struct VoxelSceneView: NSViewRepresentable {
             c.routes[id] = nil
             c.poses[id] = nil
             c.yaws[id] = nil
+            c.looks[id] = nil
         }
     }
 
@@ -207,6 +222,9 @@ struct VoxelSceneView: NSViewRepresentable {
         /// Last heading applied per figure, so a steady walk issues one
         /// turn, not one per frame.
         var yaws: [Int: CGFloat] = [:]
+        /// Last outfit applied per figure — a mismatch means the body
+        /// must be rebuilt (You changed clothes in the customizer).
+        var looks: [Int: SpriteLook] = [:]
         var scale: CGFloat = 0
         var offset: CGPoint = .zero
         var contentSize: CGSize = .zero

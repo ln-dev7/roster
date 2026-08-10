@@ -61,6 +61,14 @@ private struct GeneralSettings: View {
             }
 
             Section {
+                AvatarStylePicker()
+            } header: {
+                Text("Your avatar")
+            } footer: {
+                Text("Agents pick their own outfits — one per desk, stable across launches. These choices only dress you.")
+            }
+
+            Section {
                 Picker("Language", selection: $language) {
                     ForEach(AppLanguage.allCases) { choice in
                         Text(choice.label).tag(choice)

@@ -62,6 +62,15 @@
 "Hooks installed" = "Hooks installés";
 "Remove" = "Retirer";
 
+/* ── Avatar wardrobe ── */
+"Dress your avatar" = "Habille ton avatar";
+"Your avatar" = "Ton avatar";
+"Skin" = "Peau";
+"Hair" = "Cheveux";
+"Shirt" = "Haut";
+"Pants" = "Pantalon";
+"Agents pick their own outfits — one per desk, stable across launches. These choices only dress you." = "Les agents choisissent leurs tenues tout seuls — une par bureau, stable d'un lancement à l'autre. Ces choix n'habillent que toi.";
+
 /* ── Settings · language & updates ── */
 "Language" = "Langue";
 "System" = "Système";

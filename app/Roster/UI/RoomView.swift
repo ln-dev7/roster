@@ -47,6 +47,13 @@ struct RoomView: View {
     // ── Your character ──────────────────────────────────────────────────
     @State private var youFeet: CGPoint = RoomPlan.youSeat
     @State private var youWalking = false
+    /// Your wardrobe (see YouStyle). Observed HERE so clicking a swatch
+    /// re-renders the room live — `SpriteLook.you` alone reads the
+    /// defaults without observing them.
+    @AppStorage(YouStyle.skinKey) private var youSkin = Int(YouStyle.defaultSkin)
+    @AppStorage(YouStyle.hairKey) private var youHair = Int(YouStyle.defaultHair)
+    @AppStorage(YouStyle.shirtKey) private var youShirt = Int(YouStyle.defaultShirt)
+    @AppStorage(YouStyle.pantsKey) private var youPants = Int(YouStyle.defaultPants)
     /// The arrow keys currently held down (their key codes). keyDown adds,
     /// keyUp removes — no reliance on the keyboard's auto-repeat, which is
     /// what made the first version stutter.
@@ -333,7 +340,12 @@ struct RoomView: View {
         }
         list.append(VoxelFigure(
             id: Self.youFigureID,
-            look: .you,
+            look: SpriteLook(
+                skin: Color(hex: UInt32(clamping: youSkin)),
+                hair: Color(hex: UInt32(clamping: youHair)),
+                shirt: Color(hex: UInt32(clamping: youShirt)),
+                pants: Color(hex: UInt32(clamping: youPants))
+            ),
             feet: youFeet,
             // While walking, feet move ~60×/s: duration 0 tells the 3D
             // layer to set positions directly. The final sit-back-down
