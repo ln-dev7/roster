@@ -116,11 +116,19 @@ final class SpoolWatcher {
                   !line.trimmingCharacters(in: .whitespaces).isEmpty
             else { continue }
 
+            // Cursor IDE can glue Claude's untagged cat write and our
+            // tagged relay onto one physical line. Emit each JSON object
+            // separately so the tagged Cursor event still reaches Office.
+            let objects = ClaudeEvent.jsonObjects(in: line)
+            let chunks = objects.isEmpty ? [line] : objects
+
             // Main queue keeps delivery ordered; assumeIsolated is sound
             // because the main queue *is* the main actor's executor.
-            DispatchQueue.main.async { [onLine] in
-                MainActor.assumeIsolated {
-                    onLine(line, replay)
+            for chunk in chunks {
+                DispatchQueue.main.async { [onLine] in
+                    MainActor.assumeIsolated {
+                        onLine(chunk, replay)
+                    }
                 }
             }
         }

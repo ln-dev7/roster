@@ -1,7 +1,7 @@
 # Decisions
 
 Short log of the choices that shape Roster, so contributors (and future us)
-know *why*, not just *what*. Dates are decision dates.
+know _why_, not just _what_. Dates are decision dates.
 
 ## Product (2026-08-08)
 
@@ -11,7 +11,7 @@ know *why*, not just *what*. Dates are decision dates.
   table or a kanban, it's off course.
 - **The deliverable is the GIF.** Visual craft and the walk animation beat
   feature coverage, always. The scope test for any addition:
-  *does it improve the GIF?*
+  _does it improve the GIF?_
 - **Stations are projects, not agents.** Agents are ephemeral; the repo you
   work on persists. Two agents can share one station.
 - **V0 scope:** Claude Code only, VS Code only, one machine, five visual
@@ -20,7 +20,7 @@ know *why*, not just *what*. Dates are decision dates.
 - Known neighbors, found during research: `liuyixin-louis/agentroom`
   (Tauri, pixel art, multi-CLI) and `harishkotra/agent-office` (web,
   simulated agents). The niche is validated, not occupied — Roster
-  differentiates on native macOS craft and the "comes to *your* desk"
+  differentiates on native macOS craft and the "comes to _your_ desk"
   moment.
 
 ## Visual direction (2026-08-08)
@@ -68,12 +68,34 @@ know *why*, not just *what*. Dates are decision dates.
   kill-gate build.
 - Window: normal window with an "always on top" toggle (increment 4).
   Native macOS notification when an agent reaches your desk. Terminal
-  action opens Terminal.app at the project folder (finding the *exact*
+  action opens Terminal.app at the project folder (finding the _exact_
   terminal window of a session is not reliably possible).
 
 ## Name (2026-08-08)
 
 "Roster" kept after checking GitHub / npm / Homebrew / Mac App Store.
-Closest neighbor: `firatcand/roster` (Claude Code multi-agent *framework*,
+Closest neighbor: `firatcand/roster` (Claude Code multi-agent _framework_,
 17★) — different sub-niche, cohabitation accepted. Verified fallbacks if it
 ever bites: Homeroom, Workroom, Rollcall.
+
+## Cursor IDE (2026-08-12)
+
+- **Supported surface is Cursor IDE** (Agent Chat / Cmd+K), not
+  `cursor-agent` CLI or cloud agents. Hooks live in `~/.cursor/hooks.json`
+  (`sessionStart`, `beforeSubmitPrompt`, `stop`, `sessionEnd`).
+- **Cursor imports Claude Code user hooks.** When both are Connected,
+  one IDE step runs Claude's Roster `cat` append and our Cursor relay in
+  parallel. Claude hooks must therefore end every spool write with an
+  explicit newline (`#roster-v3`), the shared relay uses a mkdir lock, and
+  the spool reader splits glued JSON objects so a corrupted line still
+  yields the tagged Cursor event. `workspace_roots` identifies the
+  untagged copy, so it files transcripts under `cursor:<id>` rather than
+  a key no desk can match.
+- **IDE presence** scans `~/.cursor/projects/*/agent-transcripts/<id>/<id>.jsonl`
+  (undocumented → enrichment only, fail silently). Subagent transcripts
+  are ignored. Rich states still need Connect.
+- **The editor action follows the provider.** A Cursor desk offers "Open
+  in Cursor", the terminal CLIs keep V0's VS Code default (they own no
+  window, and their sessions often run in VS Code's terminal). Handing the
+  app the project folder is enough to raise the window already holding it —
+  no per-window addressing needed, so nothing to guess.

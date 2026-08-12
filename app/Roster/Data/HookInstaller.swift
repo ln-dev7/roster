@@ -27,7 +27,11 @@ enum HookInstaller {
 
     /// Bumped when the installed command set changes; an install carrying
     /// an older tag reads as "not installed" and gets upgraded in place.
-    static let versionTag = "#roster-v2"
+    ///
+    /// v3: every append ends with an explicit newline. Cursor IDE also
+    /// runs these Claude hooks; without the newline its own relay glues
+    /// a second JSON object onto the same spool line and Roster drops both.
+    static let versionTag = "#roster-v3"
 
     private static let spoolDir = "$HOME/Library/Application Support/Roster"
     private static let spoolFile = "\(spoolDir)/events.jsonl"
@@ -38,8 +42,10 @@ enum HookInstaller {
         "SessionStart", "UserPromptSubmit", "Stop", "StopFailure", "SessionEnd",
     ]
 
+    /// `printf '\\n'` after `cat` so a payload that arrives without a
+    /// trailing newline still becomes one JSONL record.
     static let plainCommand =
-        "mkdir -p \"\(spoolDir)\" && /bin/cat >> \"\(spoolFile)\" \(versionTag)"
+        "mkdir -p \"\(spoolDir)\" && /bin/cat >> \"\(spoolFile)\" && printf '\\n' >> \"\(spoolFile)\" \(versionTag)"
 
     /// Notification matchers Roster cares about. Each gets its own hook
     /// entry whose command injects `"roster_matcher":"<type>"` into the
@@ -49,7 +55,7 @@ enum HookInstaller {
     ]
 
     static func notificationCommand(matcher: String) -> String {
-        "mkdir -p \"\(spoolDir)\" && /usr/bin/sed -e 's/^{/{\"roster_matcher\":\"\(matcher)\",/' >> \"\(spoolFile)\" \(versionTag)"
+        "mkdir -p \"\(spoolDir)\" && /usr/bin/sed -e 's/^{/{\"roster_matcher\":\"\(matcher)\",/' >> \"\(spoolFile)\" && printf '\\n' >> \"\(spoolFile)\" \(versionTag)"
     }
 
     // MARK: Pure merge logic (unit-tested)

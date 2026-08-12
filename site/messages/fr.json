@@ -46,7 +46,7 @@
     },
     "f3": {
       "title": "Clique un collègue",
-      "body": "Clique un agent — dans la pièce ou dans la barre latérale — et sa carte de profil se glisse à droite : la dernière chose qu'il a dite, le chemin du repo, un bouton VS Code, un bouton Terminal, un bouton pour marquer la review faite."
+      "body": "Clique un agent — dans la pièce ou dans la barre latérale — et sa carte de profil se glisse à droite : la dernière chose qu'il a dite, le chemin du repo, un bouton qui ouvre le projet dans son propre éditeur, un bouton Terminal, un bouton pour marquer la review faite."
     },
     "f4": {
       "title": "Un vrai petit bureau",

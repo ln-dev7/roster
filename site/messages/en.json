@@ -46,7 +46,7 @@
     },
     "f3": {
       "title": "Click a colleague",
-      "body": "Click an agent — in the room or in the sidebar — and its profile card slides in: the last thing it said, the repo path, one button for VS Code, one for the Terminal, one to mark the work reviewed."
+      "body": "Click an agent — in the room or in the sidebar — and its profile card slides in: the last thing it said, the repo path, one button that opens the project in its own editor, one for the Terminal, one to mark the work reviewed."
     },
     "f4": {
       "title": "A real little office",

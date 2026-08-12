@@ -17,10 +17,11 @@ import Foundation
 //     hooks.<Event>[].hooks[] with {type:"command", command}; payload on
 //     stdin with snake_case session_id/cwd/transcript_path; stdout must
 //     be nothing but a final JSON object (the script prints "{}").
-//   • Cursor: ~/.cursor/hooks.json, {"version":1, "hooks":{event:
-//     [{"command": ...}]}}; payload on stdin with conversation_id and
-//     workspace_roots; beforeSubmitPrompt/stop are informational, their
-//     stdout is ignored.
+//   • Cursor IDE: ~/.cursor/hooks.json, {"version":1, "hooks":{event:
+//     [{"command": ...}]}}; payload on stdin with conversation_id /
+//     session_id and workspace_roots; sessionStart/beforeSubmitPrompt/
+//     stop/sessionEnd. stdout is fail-open JSON (the script prints "{}").
+//     The CLI (cursor-agent) is a separate surface — not wired here.
 //   • Codex: `notify = [argv...]` in ~/.codex/config.toml — ONE program,
 //     called with the event JSON as the final ARGUMENT (not stdin),
 //     single event type "agent-turn-complete".
@@ -59,9 +60,23 @@ enum HelperScript {
           # newline would glue two events onto a single spool line.
           payload=$(cat)
         fi
-        [ -n "$payload" ] && printf '%s\\n' "$payload" | /usr/bin/sed -e "s/^{/{\\"roster_provider\\":\\"$1\\",/" >> "$dir/events.jsonl"
-        # Gemini requires hook stdout to be nothing but JSON; everyone
-        # else ignores stdout. An empty object satisfies both.
+        [ -z "$payload" ] && { printf '{}\\n'; exit 0; }
+        tagged=$(printf '%s' "$payload" | /usr/bin/sed -e "s/^{/{\\"roster_provider\\":\\"$1\\",/")
+        # Portable exclusive lock (macOS has no flock). Cursor IDE often
+        # runs this script in parallel with Claude Code's Roster cat hook;
+        # without a lock the two appends can interleave on one line.
+        lock="$dir/events.jsonl.lock"
+        i=0
+        while ! mkdir "$lock" 2>/dev/null; do
+          i=$((i + 1))
+          [ "$i" -gt 200 ] && break
+          sleep 0.05
+        done
+        printf '%s\\n' "$tagged" >> "$dir/events.jsonl"
+        rmdir "$lock" 2>/dev/null
+        # Gemini requires hook stdout to be nothing but JSON; Cursor IDE's
+        # beforeSubmitPrompt accepts continue. An empty object is fail-open
+        # for both (and for Codex notify, which ignores stdout).
         printf '{}\\n'
         """
     }
@@ -192,13 +207,14 @@ enum GeminiInstaller {
 
 // MARK: - Cursor
 
-/// Hooks into `~/.cursor/hooks.json` — flat command entries under a
-/// versioned root. Only the two informational hooks Roster needs; the
-/// gating hooks (beforeShellExecution & co) are deliberately left alone,
-/// because a wrong answer there would break the user's Cursor.
+/// Hooks into `~/.cursor/hooks.json` for **Cursor IDE** (Agent Chat /
+/// Cmd+K). Lifecycle + prompt/stop only — gating hooks
+/// (beforeShellExecution & co) are deliberately left alone, because a
+/// wrong answer there would break the user's Cursor. The CLI
+/// (`cursor-agent`) is a separate surface and out of scope here.
 enum CursorInstaller {
 
-    static let events = ["beforeSubmitPrompt", "stop"]
+    static let events = ["sessionStart", "beforeSubmitPrompt", "stop", "sessionEnd"]
     static let marker = ".roster/roster-hook.sh"
 
     static var defaultHooksURL: URL {

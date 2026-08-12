@@ -78,6 +78,50 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(notification?.count, HookInstaller.notificationMatchers.count)
     }
 
+    func testV3CommandsAppendAnExplicitNewline() {
+        XCTAssertEqual(HookInstaller.versionTag, "#roster-v3")
+        XCTAssertTrue(HookInstaller.plainCommand.contains("printf '\\n'"),
+                      "plain cat must force a trailing newline")
+        XCTAssertTrue(HookInstaller.plainCommand.contains(HookInstaller.versionTag))
+        for matcher in HookInstaller.notificationMatchers {
+            let command = HookInstaller.notificationCommand(matcher: matcher)
+            XCTAssertTrue(command.contains("printf '\\n'"),
+                          "notification \(matcher) must force a trailing newline")
+            XCTAssertTrue(command.contains(HookInstaller.versionTag))
+        }
+    }
+
+    func testV2InstallIsUpgradedToV3() {
+        // A complete v2 install (no printf newline) must read as outdated
+        // so Connect self-heals in place.
+        let v2Plain =
+            "mkdir -p \"$HOME/Library/Application Support/Roster\" && /bin/cat >> \"$HOME/Library/Application Support/Roster/events.jsonl\" #roster-v2"
+        var hooks: [String: Any] = [:]
+        for event in HookInstaller.plainEvents {
+            hooks[event] = [[
+                "hooks": [["type": "command", "command": v2Plain, "timeout": 10]]
+            ]]
+        }
+        hooks["Notification"] = HookInstaller.notificationMatchers.map { matcher -> [String: Any] in
+            let command =
+                "mkdir -p \"$HOME/Library/Application Support/Roster\" && /usr/bin/sed -e 's/^{/{\"roster_matcher\":\"\(matcher)\",/' >> \"$HOME/Library/Application Support/Roster/events.jsonl\" #roster-v2"
+            return [
+                "matcher": matcher,
+                "hooks": [["type": "command", "command": command, "timeout": 10]],
+            ]
+        }
+        let v2: [String: Any] = ["hooks": hooks]
+        XCTAssertFalse(HookInstaller.isInstalled(in: v2), "v2 must read as outdated")
+
+        let merged = HookInstaller.merged(v2)
+        XCTAssertTrue(HookInstaller.isInstalled(in: merged))
+        let stop = ((merged["hooks"] as? [String: Any])?["Stop"] as? [[String: Any]])?
+            .compactMap { (($0["hooks"] as? [[String: Any]])?.first?["command"]) as? String }
+            .first { $0.contains(HookInstaller.spoolMarker) }
+        XCTAssertTrue(stop?.contains("#roster-v3") == true)
+        XCTAssertTrue(stop?.contains("printf '\\n'") == true)
+    }
+
     func testInstallOnDiskBacksUpAndWrites() throws {
         // A throwaway directory stands in for ~/.claude.
         let dir = FileManager.default.temporaryDirectory

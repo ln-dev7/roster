@@ -47,8 +47,9 @@ final class ClaudeCodeSource {
     /// session key → transcript file, for the staleness sweep.
     @ObservationIgnored private var transcripts: [String: URL] = [:]
     /// session key → last spool event, for sessions WITHOUT a transcript
-    /// (Cursor, Codex): those tools send no session-end, so quietness is
-    /// the only retirement signal they get.
+    /// on disk yet (Codex mid-turn before a rollout lands, Cursor IDE
+    /// before the parent transcript appears): quietness is the retirement
+    /// signal until a scan enrolls them in `transcripts`.
     @ObservationIgnored private var lastEventAt: [String: Date] = [:]
     /// Sessions that ENDED, with when. The transcript file outlives the
     /// session, and its mtime stays "fresh" for a few minutes — without
@@ -342,6 +343,7 @@ final class ClaudeCodeSource {
             }
         }
         found += scanCodexRollouts(liveness: liveness)
+        found += scanCursorTranscripts()
 
         if found > 0 {
             log.info("transcript scan: \(found) live session(s) across \(self.roots.count) root(s)")
@@ -397,8 +399,9 @@ final class ClaudeCodeSource {
             }
         }
 
-        // Transcript-less sessions (Cursor, Codex) retire on event
-        // quietness alone — their tools never say goodbye.
+        // Transcript-less sessions (Codex without a rollout yet, or a
+        // Cursor IDE chat that never wrote a parent transcript) retire
+        // on event quietness alone — those tools may never say goodbye.
         for (key, at) in lastEventAt where transcripts[key] == nil {
             if Date().timeIntervalSince(at) > staleAfter {
                 log.info("session \(key, privacy: .public) quiet; retiring")
@@ -464,6 +467,36 @@ final class ClaudeCodeSource {
             transcripts[key] = url
             _ = withAnimation(.easeOut(duration: 0.45)) {
                 office.seatActiveSession(key: key, cwd: meta.cwd)
+            }
+            found += 1
+        }
+        return found
+    }
+
+    /// Cursor IDE presence. Agent Chat leaves parent transcripts under
+    /// `~/.cursor/projects/<slug>/agent-transcripts/<id>/<id>.jsonl`.
+    /// Undocumented layout → enrichment only, silent on surprise. No
+    /// process check: the IDE's processes do not live in the workspace
+    /// cwd (same reason Cursor is exempt from the liveness sweep).
+    private func scanCursorTranscripts() -> Int {
+        guard CursorInstaller.toolDetected else { return 0 }
+        let projectsRoot = FileManager.default.homeDirectoryForCurrentUser
+            .appending(path: ".cursor/projects")
+        let hits = CursorTranscripts.warmParentTranscripts(
+            under: projectsRoot, aliveWindow: aliveWindow
+        )
+        var found = 0
+        for hit in hits {
+            if let ended = endedAt[hit.key] {
+                if hit.modified > ended.addingTimeInterval(2) {
+                    endedAt[hit.key] = nil
+                } else {
+                    continue
+                }
+            }
+            transcripts[hit.key] = hit.url
+            _ = withAnimation(.easeOut(duration: 0.45)) {
+                office.seatActiveSession(key: hit.key, cwd: hit.cwd)
             }
             found += 1
         }

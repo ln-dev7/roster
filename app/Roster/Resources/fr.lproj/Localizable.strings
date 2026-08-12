@@ -24,7 +24,8 @@
 
 /* ── Detail card ── */
 "No summary yet — it appears after the agent's first finished turn." = "Pas encore de résumé — il apparaît après le premier tour terminé de l'agent.";
-"Open in VS Code" = "Ouvrir dans VS Code";
+/* %@ is the session's editor — a product name (Cursor, VS Code). */
+"Open in %@" = "Ouvrir dans %@";
 "Open Terminal" = "Ouvrir le Terminal";
 "Reviewed" = "Review faite";
 "Close" = "Fermer";

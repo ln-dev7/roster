@@ -1,11 +1,11 @@
 # Supporting other coding agents
 
-**Status (v0.2): Gemini CLI, Cursor and Codex are WIRED** — installers in
+**Status: Gemini CLI, Cursor IDE and Codex are WIRED** — installers in
 `app/Roster/Data/ProviderInstallers.swift`, payload dialects in
 `ClaudeEvent.swift`, one shared relay script at `~/.roster/roster-hook.sh`.
-Everything below was verified against each tool's documentation, not
-against a live run: real-world validation reports are very welcome (that
-is issue-tracker material). opencode and Kimi remain research-only.
+Cursor IDE has been live-validated (3.15 + Claude hooks coexistence).
+opencode and Kimi remain research-only; `cursor-agent` CLI / cloud agents
+are deferred.
 
 This document is the honest research behind that wiring — Gemini CLI,
 Codex, Cursor, opencode, Kimi, DeepSeek — gathered from each tool's
@@ -85,19 +85,37 @@ the previous program from ours) — and it's TOML, so editing must be
 conservative (append-only, backup first). Recent Codex versions have been
 adding richer lifecycle hooks; worth re-checking before building.
 
-### Cursor — ★★☆ feasible for the IDE, CLI still catching up
+### Cursor IDE — ★★★ wired (CLI / cloud deferred)
+
+**Supported surface: Cursor IDE** (Agent Chat / Cmd+K), not
+`cursor-agent` CLI or cloud agents.
 
 Cursor 1.7+ has `hooks.json` (`~/.cursor/hooks.json` global, or per
-project) with stdin-JSON hooks: `beforeSubmitPrompt` (→ prompt
-submitted), `stop` with a completed/aborted/error status (→ finished /
-failed), plus `conversation_id` and `workspace_roots` for identity and
-desks. That is a decent Roster vocabulary.
+project) with stdin-JSON hooks. Roster installs
+`sessionStart` / `beforeSubmitPrompt` / `stop` / `sessionEnd`, mapping
+them onto the room vocabulary via `conversation_id` (or `session_id`)
+and `workspace_roots`. There is still no fine-grained "needs input"
+event.
 
-Caveats: the payload has no obvious "needs input" event; community
-reports say the **CLI** (`cursor-agent`) doesn't fire all documented
-events yet; and Cursor sessions are IDE windows, so presence scanning has
-no documented on-disk session artifact. Verdict: wire the hooks, accept
-that presence-only detection may not exist.
+**Live validation (2026-08-12, Cursor 3.15.6):** Cursor also loads
+Roster's Claude Code hooks from `~/.claude/settings.json` and runs them
+on overlapping steps. Without a trailing newline on the Claude `cat`
+append, the two writers glued JSON onto one spool line and Roster
+dropped the event. Fixed by Claude hooks `#roster-v3` (explicit newline),
+a mkdir lock in `roster-hook.sh`, and multi-object splitting in the
+spool reader. The untagged copy is recognized by its `workspace_roots`
+field, so the staleness sweep files both copies under the same
+`cursor:<id>` key instead of a phantom unprefixed one.
+
+**Presence (v0.4+):** parent transcripts at
+`~/.cursor/projects/<slug>/agent-transcripts/<id>/<id>.jsonl` back the
+30 s scan (`CursorTranscripts`). Undocumented → enrichment only; slug→path
+only when the reconstructed directory exists. Subagents under
+`…/subagents/` are ignored. No process liveness check (IDE processes do
+not sit in the workspace cwd).
+
+CLI (`cursor-agent`) still reports incomplete hook coverage — left alone
+on purpose.
 
 ### opencode — ★★☆ feasible via a plugin
 
@@ -127,7 +145,7 @@ through opencode, aider and similar. Supporting the *tools* covers the
 1. **Gemini CLI** — same architecture, biggest overlap, real hooks.
 2. **opencode** — tiny plugin, full vocabulary, covers many models.
 3. **Codex** — finished-only, but the summary payload is great.
-4. **Cursor** — after the CLI's hooks stabilize.
+4. **Cursor IDE** — done (hooks + presence); CLI/cloud later if hooks stabilize.
 5. **Kimi** — once someone can test it for real.
 
 Each adapter should ship with the same guarantees Claude Code got:
