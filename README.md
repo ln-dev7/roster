@@ -19,8 +19,9 @@
   <a href="https://github.com/ln-dev7/roster/releases/latest"><img alt="Download" src="https://img.shields.io/badge/download-.dmg-5e6ad2"></a>
 </p>
 
-Roster is a macOS app that shows your Claude Code sessions as little 3D
-voxel colleagues in a cozy pixel office — one desk per session, always.
+Roster is a macOS app that shows your coding agents — Claude Code,
+Gemini CLI, Cursor and Codex — as little 3D voxel colleagues in a cozy
+pixel office, one desk per session, always.
 They work at their desks. They stand up when they need you. And when one
 finishes a real piece of work, it gets up, crosses the room, and waits
 at your desk. Click anyone for its profile card, wander around with the
@@ -32,8 +33,9 @@ it. The state of the room *is* the state of your agents.
 
 ## How it works
 
-Three small pieces, all local. With your consent, Roster adds one hook
-line to each of your Claude Code config folders (after backing them up);
+Three small pieces, all local. With your consent, Roster wires every
+agent it finds — hooks in each Claude Code and Gemini CLI settings,
+Cursor's hooks.json, Codex's notify — every config backed up first;
 every session event is appended to a local spool file that Roster tails —
 it even catches up on what happened while it was closed. A read-only
 transcript scan makes sessions appear automatically before any of that,
