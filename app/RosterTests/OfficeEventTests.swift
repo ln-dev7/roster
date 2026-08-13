@@ -269,6 +269,21 @@ final class ClaudeEventParsingTests: XCTestCase {
         XCTAssertEqual(extracted?.path, "/Users/x/.claude/projects/-repo/abc.jsonl")
     }
 
+    func testUntaggedCursorCopyFilesUnderItsProviderKey() {
+        // The copy Cursor writes through Claude Code's hooks carries no
+        // provider tag; `workspace_roots` is what identifies it.
+        let cursorPath = "/Users/x/.cursor/projects/-repo-x/agent-transcripts/c1/c1.jsonl"
+        let untagged = #"{"hook_event_name":"stop","session_id":"c1","conversation_id":"c1","workspace_roots":["/repo/x"],"transcript_path":"\#(cursorPath)"}"#
+        XCTAssertEqual(ClaudeEvent.transcriptPath(fromJSONLine: untagged)?.key,
+                       "cursor:c1",
+                       "an untagged Cursor copy must not file a key no desk can match")
+
+        let tagged = #"{"roster_provider":"cursor","hook_event_name":"stop","conversation_id":"c1","workspace_roots":["/repo/x"],"transcript_path":"\#(cursorPath)"}"#
+        XCTAssertEqual(ClaudeEvent.transcriptPath(fromJSONLine: tagged)?.key,
+                       "cursor:c1",
+                       "both copies of one event must land on the same key")
+    }
+
     func testGarbageAndUnknownEventsAreIgnored() {
         XCTAssertNil(ClaudeEvent(jsonLine: ""))
         XCTAssertNil(ClaudeEvent(jsonLine: "not json at all"))
@@ -300,6 +315,14 @@ final class ClaudeEventParsingTests: XCTestCase {
     }
 
     func testCursorDialect() {
+        let start = #"{"roster_provider":"cursor","hook_event_name":"sessionStart","conversation_id":"c1","workspace_roots":["/repo/x"]}"#
+        XCTAssertEqual(ClaudeEvent(jsonLine: start),
+                       .sessionStart(key: "cursor:c1", cwd: "/repo/x"))
+
+        let startNoCwd = #"{"roster_provider":"cursor","hook_event_name":"sessionStart","session_id":"c1"}"#
+        XCTAssertNil(ClaudeEvent(jsonLine: startNoCwd),
+                     "sessionStart without a workspace cannot place a desk")
+
         let prompt = #"{"roster_provider":"cursor","hook_event_name":"beforeSubmitPrompt","conversation_id":"c1","workspace_roots":["/repo/x"],"prompt":"go"}"#
         XCTAssertEqual(ClaudeEvent(jsonLine: prompt),
                        .promptSubmitted(key: "cursor:c1", cwd: "/repo/x"))
@@ -315,6 +338,29 @@ final class ClaudeEventParsingTests: XCTestCase {
         let aborted = #"{"roster_provider":"cursor","hook_event_name":"stop","conversation_id":"c1","workspace_roots":["/repo/x"],"status":"aborted"}"#
         XCTAssertNil(ClaudeEvent(jsonLine: aborted),
                      "a cancelled turn is neither finished nor failed")
+
+        let end = #"{"roster_provider":"cursor","hook_event_name":"sessionEnd","conversation_id":"c1","workspace_roots":["/repo/x"]}"#
+        XCTAssertEqual(ClaudeEvent(jsonLine: end), .sessionEnd(key: "cursor:c1"))
+    }
+
+    func testGluedSpoolLineRecoversTaggedCursorEvent() {
+        // Cursor IDE runs Claude's Roster cat hook + our cursor relay in
+        // parallel; without a trailing newline they glue onto one line.
+        let untagged = #"{"hook_event_name":"beforeSubmitPrompt","conversation_id":"c1","workspace_roots":["/repo/x"]}"#
+        let tagged = #"{"roster_provider":"cursor","hook_event_name":"beforeSubmitPrompt","conversation_id":"c1","workspace_roots":["/repo/x"]}"#
+        let glued = untagged + tagged
+
+        let objects = ClaudeEvent.jsonObjects(in: glued)
+        XCTAssertEqual(objects.count, 2)
+        XCTAssertNil(ClaudeEvent(jsonLine: objects[0]),
+                     "untagged Cursor-shaped payload is not Claude dialect")
+        XCTAssertEqual(ClaudeEvent(jsonLine: objects[1]),
+                       .promptSubmitted(key: "cursor:c1", cwd: "/repo/x"))
+    }
+
+    func testJsonObjectsReturnsSingleValidLineUnchanged() {
+        let line = #"{"roster_provider":"cursor","hook_event_name":"stop","conversation_id":"c1","status":"completed"}"#
+        XCTAssertEqual(ClaudeEvent.jsonObjects(in: line), [line])
     }
 
     func testCodexDialect() {

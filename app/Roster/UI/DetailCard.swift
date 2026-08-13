@@ -21,6 +21,9 @@ struct DetailCard: View {
 
     private var name: String { office.displayName(for: session) }
 
+    /// A Cursor desk opens in Cursor, a terminal CLI's desk in VS Code.
+    private var editor: EditorApp { (workstation?.provider ?? .claudeCode).editor }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             portrait
@@ -127,10 +130,11 @@ struct DetailCard: View {
             HStack(spacing: 8) {
                 Button {
                     if let path = workstation?.path {
-                        WorkspaceActions.openInVSCode(path: path)
+                        WorkspaceActions.openInEditor(editor, path: path)
                     }
                 } label: {
-                    Text("Open in VS Code").frame(maxWidth: .infinity)
+                    Text(verbatim: String(localized: "Open in \(editor.productName)"))
+                        .frame(maxWidth: .infinity)
                 }
                 .disabled(workstation?.path == nil)
 

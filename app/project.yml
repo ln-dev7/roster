@@ -100,10 +100,12 @@ targets:
         MARKETING_VERSION: "0.4.1"
         CURRENT_PROJECT_VERSION: 5
 
-        # Automatic signing with the development certificate for local builds.
-        # Release signing (Developer ID + notarization) will be handled by
-        # scripts/build.sh in increment 5, never by Xcode.
-        CODE_SIGN_STYLE: Automatic
+        # Ad-hoc signing for local builds: no Apple account or certificate
+        # needed to run from Xcode. Release signing (Developer ID +
+        # notarization) is handled by scripts/build.sh, never by Xcode.
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
 
         # Hardened runtime from day one: required for notarization later, so
         # we develop under the same conditions. No sandbox: Roster must read
@@ -134,6 +136,8 @@ targets:
       - path: Roster/Data/HookInstaller.swift
       - path: Roster/Data/ProviderInstallers.swift
       - path: Roster/Data/ClaudeConfigRoots.swift
+      - path: Roster/Data/CursorTranscripts.swift
+      - path: Roster/Data/WorkspaceActions.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.lndev.roster.tests

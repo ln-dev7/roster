@@ -62,6 +62,9 @@ final class ProviderInstallersTests: XCTestCase {
         XCTAssertEqual(stop.count, 2, "the foreign stop hook survives next to ours")
         let audit = hooks?["afterFileEdit"] as? [[String: Any]] ?? []
         XCTAssertEqual(audit.count, 1, "events Roster doesn't use pass through")
+        for event in ["sessionStart", "beforeSubmitPrompt", "stop", "sessionEnd"] {
+            XCTAssertNotNil(hooks?[event], "IDE lifecycle event \(event) must be wired")
+        }
     }
 
     func testCursorMergeIsSelfHealing() {
@@ -69,6 +72,27 @@ final class ProviderInstallersTests: XCTestCase {
         let hooks = twice["hooks"] as? [String: Any]
         for event in CursorInstaller.events {
             XCTAssertEqual((hooks?[event] as? [[String: Any]])?.count, 1)
+        }
+    }
+
+    func testCursorTwoEventInstallUpgradesToFour() {
+        // v0.2 only wired beforeSubmitPrompt + stop; Connect must add
+        // sessionStart/sessionEnd without duplicating the originals.
+        let old: [String: Any] = [
+            "version": 1,
+            "hooks": [
+                "beforeSubmitPrompt": [["command": "/Users/me/.roster/roster-hook.sh cursor"]],
+                "stop": [["command": "/Users/me/.roster/roster-hook.sh cursor"]],
+            ],
+        ]
+        XCTAssertFalse(CursorInstaller.isInstalled(in: old),
+                       "missing sessionStart/sessionEnd must read as outdated")
+        let merged = CursorInstaller.merged(old)
+        XCTAssertTrue(CursorInstaller.isInstalled(in: merged))
+        let hooks = merged["hooks"] as? [String: Any]
+        for event in CursorInstaller.events {
+            XCTAssertEqual((hooks?[event] as? [[String: Any]])?.count, 1,
+                           "\(event) must appear exactly once after upgrade")
         }
     }
 

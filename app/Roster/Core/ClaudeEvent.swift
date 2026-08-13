@@ -152,25 +152,31 @@ extension ClaudeEvent {
         }
     }
 
-    /// Cursor hooks — verified against Cursor 1.7's hooks.json format:
-    /// `conversation_id` + `workspace_roots` on every event, and a
-    /// `status` on `stop`. No session-start and no session-end events;
-    /// the first prompt materializes the desk, staleness retires it.
+    /// Cursor IDE hooks — Agent Chat / Cmd+K via hooks.json.
+    /// `conversation_id` (or `session_id`) + `workspace_roots` on events,
+    /// and a `status` on `stop`. sessionStart is pending-only in Office
+    /// (same as Claude); the first prompt seats. sessionEnd retires.
     private static func cursor(_ data: Data) -> ClaudeEvent? {
         struct Payload: Decodable {
             let hook_event_name: String?
             let conversation_id: String?
+            let session_id: String?
             let workspace_roots: [String]?
             let status: String?
         }
         guard let p = try? JSONDecoder().decode(Payload.self, from: data),
               let event = p.hook_event_name,
-              let id = p.conversation_id
+              let id = p.conversation_id ?? p.session_id
         else { return nil }
         let key = "cursor:\(id)"
         let cwd = p.workspace_roots?.first
 
         switch event {
+        case "sessionStart":
+            // IDE may omit workspace_roots on a brand-new composer; without
+            // a cwd we cannot place a desk, so wait for the first prompt.
+            guard let cwd else { return nil }
+            return .sessionStart(key: key, cwd: cwd)
         case "beforeSubmitPrompt":
             return .promptSubmitted(key: key, cwd: cwd)
         case "stop":
@@ -184,6 +190,8 @@ extension ClaudeEvent {
             default:
                 return .stopped(key: key, cwd: cwd, summary: nil)
             }
+        case "sessionEnd":
+            return .sessionEnd(key: key)
         default:
             return nil
         }
@@ -215,21 +223,83 @@ extension ClaudeEvent {
                         summary: p.lastAssistantMessage)
     }
 
+    /// Split a physical spool line into top-level JSON objects.
+    ///
+    /// Cursor IDE runs Claude Code's Roster `cat` hook alongside our
+    /// tagged relay; when the cat write lacks a trailing newline the two
+    /// objects glue onto one line. Healing that here recovers the tagged
+    /// Cursor event without throwing away the whole line.
+    static func jsonObjects(in line: String) -> [String] {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        if trimmed.first == "{",
+           (try? JSONSerialization.jsonObject(with: Data(trimmed.utf8))) != nil {
+            return [trimmed]
+        }
+
+        var objects: [String] = []
+        var depth = 0
+        var inString = false
+        var escape = false
+        var start: String.Index?
+
+        for i in trimmed.indices {
+            let ch = trimmed[i]
+            if inString {
+                if escape {
+                    escape = false
+                } else if ch == "\\" {
+                    escape = true
+                } else if ch == "\"" {
+                    inString = false
+                }
+                continue
+            }
+            switch ch {
+            case "\"":
+                inString = true
+            case "{":
+                if depth == 0 { start = i }
+                depth += 1
+            case "}":
+                guard depth > 0 else { continue }
+                depth -= 1
+                if depth == 0, let start {
+                    objects.append(String(trimmed[start...i]))
+                }
+            default:
+                break
+            }
+        }
+        return objects
+    }
+
     /// The transcript path carried by a spool line, if any — used by the
     /// staleness sweep, not by the state machine. The key gets the same
     /// provider prefix as the events, so the sweep retires the right one.
+    /// Cursor IDE uses `conversation_id`; Claude/Gemini use `session_id`.
     static func transcriptPath(fromJSONLine line: String) -> (key: String, path: String)? {
         struct Mini: Decodable {
             let roster_provider: String?
             let session_id: String?
+            let conversation_id: String?
+            let workspace_roots: [String]?
             let transcript_path: String?
         }
         guard let mini = try? JSONDecoder().decode(
             Mini.self,
             from: Data(line.trimmingCharacters(in: .whitespacesAndNewlines).utf8)
-        ), let id = mini.session_id, let path = mini.transcript_path
+        ), let path = mini.transcript_path,
+           let id = mini.session_id ?? mini.conversation_id
         else { return nil }
-        let key = mini.roster_provider.map { "\($0):\(id)" } ?? id
+        // Cursor imports Claude Code's hooks, so every Cursor event also
+        // reaches the spool untagged. `workspace_roots` is Cursor's own
+        // field and gives those copies away — without it they would file an
+        // unprefixed key no desk can ever match, leaving the sweep to
+        // track a session that does not exist.
+        let provider = mini.roster_provider
+            ?? (mini.workspace_roots == nil ? nil : "cursor")
+        let key = provider.map { "\($0):\(id)" } ?? id
         return (key, path)
     }
 }

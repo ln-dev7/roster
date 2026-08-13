@@ -78,7 +78,8 @@ Panel, ⇧⌘D).
 With Roster running, open a terminal in any repository and start
 `claude`. Within ~30 s a desk appears, named after the folder, with a
 seated working dot — no setup, read-only. The popover's *Open in VS
-Code* / *Open Terminal* now work (real path).
+Code* / *Open Terminal* now work (real path). On a Cursor desk the first
+button reads *Open in Cursor* and raises that project's Cursor window.
 
 Rich states are NOT expected yet: without the hook the room only knows
 who is present.
@@ -87,7 +88,7 @@ who is present.
 
 1. Click **Connect** in the banner. Check:
    ```sh
-   grep -c roster-v2 ~/.claude/settings.json    # ≥ 1
+   grep -c roster-v3 ~/.claude/settings.json    # ≥ 1
    ls ~/.claude/settings.json.roster-backup-*   # backup exists
    ```
 2. **Restart your claude session** — hooks load at session start.
@@ -110,6 +111,37 @@ Plumbing checks, if anything looks off:
 tail -5 ~/Library/Application\ Support/Roster/events.jsonl
 log stream --predicate 'subsystem == "com.lndev.roster"' --level info
 ```
+
+## 4b. Cursor IDE (Agent Chat / Cmd+K)
+
+Not the `cursor-agent` CLI. Requires `~/.cursor` present; Connect wires
+`~/.cursor/hooks.json`.
+
+1. After Connect, confirm the four IDE events:
+   ```sh
+   python3 - <<'EOF'
+   import json, pathlib
+   h = json.loads((pathlib.Path.home()/'.cursor/hooks.json').read_text())
+   print(sorted(h.get('hooks', {})))
+   EOF
+   # expect sessionStart, beforeSubmitPrompt, stop, sessionEnd among them
+   ```
+2. Optionally clear a corrupted spool from an older install:
+   `:> ~/Library/Application\ Support/Roster/events.jsonl`
+3. In Cursor IDE Agent Chat, open a real workspace and send a short
+   prompt. A desk named after the folder should appear (hook and/or the
+   `agent-transcripts` presence scan within ~30 s).
+4. A longer turn that finishes: agent walks on `stop` / completed.
+5. Spool lines must be **one JSON object each**. Cursor may still run
+   Claude's Roster hook in parallel — that is expected — but lines must
+   not glue:
+   ```sh
+   tail -f ~/Library/Application\ Support/Roster/events.jsonl
+   ```
+6. Optional debug: Cursor's hooks log under
+   `~/Library/Application Support/Cursor/logs/**/cursor.hooks*.log`
+   should show both the Claude `cat` hook and `roster-hook.sh cursor`
+   exiting 0.
 
 ## 5. Robustness
 
