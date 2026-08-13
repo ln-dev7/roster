@@ -97,8 +97,8 @@ targets:
       base:
         PRODUCT_NAME: Roster
         PRODUCT_BUNDLE_IDENTIFIER: com.lndev.roster
-        MARKETING_VERSION: "0.4.1"
-        CURRENT_PROJECT_VERSION: 5
+        MARKETING_VERSION: "0.5.0"
+        CURRENT_PROJECT_VERSION: 6
 
         # Ad-hoc signing for local builds: no Apple account or certificate
         # needed to run from Xcode. Release signing (Developer ID +
